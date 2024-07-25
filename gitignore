@@ -1,0 +1,24 @@
+# Dependency directories
+/node_modules
+
+# Environment variables file (if using dotenv or similar)
+.env
+
+# IDE files
+.vscode/
+.idea/
+
+# Log files
+*.log
+
+# Ignore npm's package-lock.json. Use package.json instead.
+package-lock.json
+
+# Ignore macOS specific files
+.DS_Store
+
+# Ignore MongoDB data directory (if storing data locally)
+/data
+
+# Ignore any sensitive or generated files
+config/*.config.js
