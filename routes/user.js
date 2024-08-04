@@ -1,73 +1,109 @@
 import express from 'express';
-import { Account, User } from '../db.js';
 import z from 'zod';
 import jwt from 'jsonwebtoken';
 import extractToken from '../middleware.js';
 import bcrypt from 'bcryptjs';
 import { JWT_SECRET } from '../config.js';
+import User from '../models/usermodel.js';
 
 const router = express.Router();
 
-const signupSchema = z.object({
+const registerSchema = z.object({
   username: z.string(),
-  firstname: z.string(),
-  lastname: z.string().optional(),
+  fullName: z.string(),
   password: z.string().min(6),
   confirmPassword: z.string().min(6),
-}).refine(data => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"], // Set the path of the error
-});
+})
 
-const signinSchema = z.object({
+
+
+const loginSchema = z.object({
   username: z.string(),
   password: z.string(),
 });
+
+
 
 const changePasswordSchema = z.object({
   oldPassword: z.string(),
   newPassword: z.string().min(6),
 });
 
-const generateRandomBalance = () => {
-  return Math.floor(Math.random() * 1000) + 1; // Random balance between 1 and 1000
-};
 
-router.post('/signup', async (req, res) => {
+
+router.post('/register', async (req, res) => {
   try {
-    const body = req.body;
-    console.log("hurray")
+    const { username, fullName, password, confirmPassword } = req.body;
+    console.log("Registration attempt:", username, fullName, password, confirmPassword);
 
-    const result = signupSchema.safeParse(body);
+    // Validate request body using registerSchema
+    const result = registerSchema.safeParse(req.body);
     if (!result.success) {
-      return res.status(400).send('Validation Error');
+      return res.status(400).json({
+        error: 'Validation Error',
+        details: result.error.errors
+      });
     }
 
-    const existingUser = await User.findOne({ username: body.username });
-    1
+    if (password !== confirmPassword) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'Passwords do not match'
+      });
+    }
+
+    const existingUser = await User.findOne({ username });
     if (existingUser) {
-      return res.status(400).send('User already exists');
+      return res.status(400).json({
+        error: 'User already exists'
+      });
     }
 
-    const hashedPassword = await bcrypt.hash(body.password, 10);
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = await User.create({ ...body, password: hashedPassword });
-    const randomBalance = generateRandomBalance();
-    const newAccount = await Account.create({ userId: newUser._id, balance: randomBalance });
-    const token = jwt.sign({ id: newUser._id }, JWT_SECRET, { expiresIn: '1h' });
-    const { _id } = newUser
-    return res.status(200).json({ message: 'User created successfully', token, Id: _id });
+    // Create new user
+    const newUser = await User.create({
+      username,
+      fullName,
+      password: hashedPassword,
+      role: "student"
+    });
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: newUser._id, username: newUser.username },
+      JWT_SECRET,
+      { expiresIn: '1h' } // Token expiration time
+    );
+
+    // Send success response with token
+    return res.status(201).json({
+      message: 'User created successfully',
+      token, // Send the token
+      user: {
+        id: newUser._id,
+        username: newUser.username,
+        fullName: newUser.fullName,
+        role: newUser.role
+      }
+    });
   } catch (error) {
     console.error('Error:', error);
-    return res.status(500).send('Internal Server Error');
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: error.message
+    });
   }
 });
+
+
 
 router.post('/login', async (req, res) => {
   try {
     const body = req.body;
 
-    const result = signinSchema.safeParse(body);
+    const result = loginSchema.safeParse(body);
     if (!result.success) {
       return res.status(400).send('Invalid request');
     }
@@ -95,6 +131,7 @@ router.post('/login', async (req, res) => {
 
 
 
+
 router.post('/change-password', extractToken, async (req, res) => {
   try {
     const body = req.body;
@@ -106,6 +143,8 @@ router.post('/change-password', extractToken, async (req, res) => {
 
     const { oldPassword, newPassword } = body;
     const user = await User.findById(req.user.id);
+
+
 
     if (!user) {
       return res.status(401).send('User not found');
