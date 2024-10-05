@@ -13,6 +13,11 @@ app.use(bodyParser.json());  // Removed extra parentheses
 
 console.log("Testing");
 
+app.use(cors({
+  origin: '*',
+}));
+
+
 app.use("/api/v1/user", userrouter);
 
 app.listen(port, () => {
