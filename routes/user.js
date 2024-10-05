@@ -9,7 +9,7 @@ import User from '../models/usermodel.js';
 const router = express.Router();
 
 const registerSchema = z.object({
-  username: z.string(),
+  email: z.string(),
   fullName: z.string(),
   password: z.string().min(6),
   confirmPassword: z.string().min(6),
@@ -18,7 +18,7 @@ const registerSchema = z.object({
 
 
 const loginSchema = z.object({
-  username: z.string(),
+  email: z.string(),
   password: z.string(),
 });
 
@@ -33,12 +33,13 @@ const changePasswordSchema = z.object({
 
 router.post('/register', async (req, res) => {
   try {
-    const { username, fullName, password, confirmPassword } = req.body;
-    console.log("Registration attempt:", username, fullName, password, confirmPassword);
+    const { email, fullName, password, confirmPassword } = req.body;
+    console.log("Registration attempt:", email, fullName, password, confirmPassword);
 
     // Validate request body using registerSchema
     const result = registerSchema.safeParse(req.body);
     if (!result.success) {
+      console.log("Validation error", result.error.errors);
       return res.status(400).json({
         error: 'Validation Error',
         details: result.error.errors
@@ -46,14 +47,16 @@ router.post('/register', async (req, res) => {
     }
 
     if (password !== confirmPassword) {
+      console.log("Passwords do not match");
       return res.status(400).json({
         error: 'Validation Error',
         message: 'Passwords do not match'
       });
     }
 
-    const existingUser = await User.findOne({ username });
+    const existingUser = await User.findOne({ email });
     if (existingUser) {
+      console.log("User already exists");
       return res.status(400).json({
         error: 'User already exists'
       });
@@ -64,38 +67,53 @@ router.post('/register', async (req, res) => {
 
     // Create new user
     const newUser = await User.create({
-      username,
+      email,
       fullName,
       password: hashedPassword,
       role: "student"
     });
 
+    console.log("User created successfully", newUser);
+
     // Generate JWT token
     const token = jwt.sign(
-      { userId: newUser._id, username: newUser.username },
+      { userId: newUser._id, email: newUser.email },
       JWT_SECRET,
       { expiresIn: '1h' } // Token expiration time
     );
 
+    console.log("Token generated successfully", token);
+
     // Send success response with token
     return res.status(201).json({
+      status: true,
       message: 'User created successfully',
       token, // Send the token
       user: {
         id: newUser._id,
-        username: newUser.username,
+        email: newUser.email,
         fullName: newUser.fullName,
         role: newUser.role
       }
     });
   } catch (error) {
     console.error('Error:', error);
+
+    // Handle duplicate key error
+    if (error.code === 11000) {
+      return res.status(400).json({
+        error: 'Duplicate Key Error',
+        message: 'A user with this email already exists'
+      });
+    }
+
     return res.status(500).json({
       error: 'Internal Server Error',
       message: error.message
     });
   }
 });
+
 
 
 
@@ -108,8 +126,8 @@ router.post('/login', async (req, res) => {
       return res.status(400).send('Invalid request');
     }
 
-    const { username, password } = body;
-    const user = await User.findOne({ username });
+    const { email, password } = body;
+    const user = await User.findOne({ email });
 
     if (!user) {
       return res.status(401).json('Invalid credentials');
