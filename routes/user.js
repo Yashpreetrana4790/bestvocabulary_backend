@@ -34,17 +34,26 @@ const changePasswordSchema = z.object({
 router.post('/register', async (req, res) => {
   try {
     const { email, fullName, password, confirmPassword } = req.body;
-    console.log("Registration attempt:", email, fullName, password, confirmPassword);
+    console.log("email:", email, "fullName:", fullName, "password:", password, "confirmPassword:", confirmPassword);
 
-    // Validate request body using registerSchema
-    const result = registerSchema.safeParse(req.body);
-    if (!result.success) {
-      console.log("Validation error", result.error.errors);
+    if (!email || !fullName || !password || !confirmPassword) {
+      console.log("All fields are required");
       return res.status(400).json({
         error: 'Validation Error',
-        details: result.error.errors
+        message: 'All fields are required'
       });
     }
+
+
+    const validation = registerSchema.safeParse(req.body);
+    if (!validation.success) {
+      console.log("Validation error", validation.error.errors);
+      return res.status(400).json({
+        error: 'Validation Error',
+        details: validation.error.errors
+      });
+    }
+
 
     if (password !== confirmPassword) {
       console.log("Passwords do not match");
@@ -54,9 +63,12 @@ router.post('/register', async (req, res) => {
       });
     }
 
+    // Check for existing user
     const existingUser = await User.findOne({ email });
+    console.log("existingUser:", existingUser);
     if (existingUser) {
-      console.log("User already exists");
+
+      console.log("User already exists:", existingUser.email);
       return res.status(400).json({
         error: 'User already exists'
       });
@@ -64,6 +76,8 @@ router.post('/register', async (req, res) => {
 
     // Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
+
+    console.log("hashedPassword:", hashedPassword);
 
     // Create new user
     const newUser = await User.create({
@@ -73,22 +87,19 @@ router.post('/register', async (req, res) => {
       role: "student"
     });
 
-    console.log("User created successfully", newUser);
+    if (!newUser) {
+      return res.status(400).json({
+        error: 'Failed to create user'
+      });
+    }
 
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: newUser._id, email: newUser.email },
-      JWT_SECRET,
-      { expiresIn: '1h' } // Token expiration time
-    );
 
-    console.log("Token generated successfully", token);
+    const token = generateToken(newUser._id, newUser.email);
 
-    // Send success response with token
     return res.status(201).json({
       status: true,
       message: 'User created successfully',
-      token, // Send the token
+      token,
       user: {
         id: newUser._id,
         email: newUser.email,
@@ -97,13 +108,13 @@ router.post('/register', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error:', error);
+    console.error("MongoDB error:", error);
 
-    // Handle duplicate key error
     if (error.code === 11000) {
+      console.log("Duplicate key value:", error.keyValue);
       return res.status(400).json({
         error: 'Duplicate Key Error',
-        message: 'A user with this email already exists'
+        message: `A user with this ${Object.keys(error.keyValue)[0]} already exists`
       });
     }
 
@@ -112,7 +123,18 @@ router.post('/register', async (req, res) => {
       message: error.message
     });
   }
+
 });
+
+// Token generation function
+const generateToken = (userId, email) => {
+  return jwt.sign(
+    { userId, email },
+    JWT_SECRET,
+    { expiresIn: '1h' }
+  );
+};
+
 
 
 
@@ -185,8 +207,18 @@ router.post('/change-password', extractToken, async (req, res) => {
 });
 
 
-
-
+router.get('/allusers', async (req, res) => {
+  try {
+    const user = await User.find().select('-password' - '__v' - 'createdAt' - 'updatedAt');
+    if (!user) {
+      return res.status(404).send('Users not found');
+    }
+    return res.status(200).json(user);
+  } catch (error) {
+    console.error('Error:', error);
+    return res.status(500).send('Internal Server Error');
+  }
+})
 
 
 

@@ -13,6 +13,6 @@ const idiomSchema = new Schema({
   words: [{ type: Schema.Types.ObjectId, ref: 'Word' }], // Array of references to Word models
 }, { timestamps: true });
 
-// Export the model
+
 const Idiom = mongoose.model('Idiom', idiomSchema);
 export default Idiom;
