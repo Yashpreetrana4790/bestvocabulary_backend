@@ -1,32 +1,29 @@
 import mongoose from 'mongoose';
-
+import exampleSchema from './examplesmodel.js';
 const { Schema } = mongoose;
 
-// Define the example schema
-export const exampleSchema = new Schema({
-  sentence: { type: String, required: true },
-});
 
-// Define the meaning schema
 const meaningSchema = new Schema({
   meaningsubtype: { type: String, required: true },
+  partOfSpeech: { type: String },
   definition: { type: String, required: true },
   examples: [exampleSchema],
   synonyms: [{ type: String }],
   antonyms: [{ type: String }],
-});
+})
 
-// Define the Word schema
+
 const wordSchema = new Schema({
   word: { type: String, required: true, unique: true },
   pronunciation: { type: String },
-  partOfSpeech: { type: String },
-  idioms: [{ type: Schema.Types.ObjectId, ref: 'Idiom' }], 
-  phrases: [{ type: Schema.Types.ObjectId, ref: 'Phrase' }], 
+  level: { type: String, enum: ["Pro", "Elementary", "MiddleSchool", "HighSchool", "CollegeUniversity"], required: true },
+  idioms: [{ type: Schema.Types.ObjectId, ref: 'Idiom', default: undefined }],
+  phrases: [{ type: Schema.Types.ObjectId, ref: 'Phrase', default: undefined }],
+  level: { type: String, enum: ['Pro', 'Elementary', 'MiddleSchool', 'HighSchool', 'CollegeUniversity'], required: true },
   meanings: [meaningSchema],
 }, { timestamps: true });
 
-// Create the Word model
-const Word = mongoose.model('Word', wordSchema);
 
-export default Word;
+const Words = mongoose.model('Words', wordSchema);
+
+export default Words;

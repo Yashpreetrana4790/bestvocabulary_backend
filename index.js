@@ -1,25 +1,22 @@
 import express from 'express';
 import cors from 'cors';
-import bodyParser from 'body-parser';
 import userrouter from './routes/user.js';
+import wordsrouter from './routes/words.js';
 import 'dotenv/config';
-import './db.js';  // Import the db.js file to establish the MongoDB connection
+import './db.js';  
 
 const app = express();
-const port = 8000;
+const port = process.env.PORT || 8000; 
 
-app.use(cors());
-app.use(bodyParser.json());  // Removed extra parentheses
+// Middleware
+app.use(cors({ origin: '*' }));
+app.use(express.json()); 
 
-console.log("Testing");
-
-app.use(cors({
-  origin: '*',
-}));
-
-
+// Routes
 app.use("/api/v1/user", userrouter);
+app.use("/api/v1/admin", wordsrouter);
 
+// Start server
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
