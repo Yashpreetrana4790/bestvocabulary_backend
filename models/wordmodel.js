@@ -19,10 +19,9 @@ const wordSchema = new Schema({
   level: { type: String, enum: ["Pro", "Elementary", "MiddleSchool", "HighSchool", "CollegeUniversity"], required: true },
   idioms: [{ type: Schema.Types.ObjectId, ref: 'Idiom', default: undefined }],
   phrases: [{ type: Schema.Types.ObjectId, ref: 'Phrase', default: undefined }],
-  level: { type: String, enum: ['Pro', 'Elementary', 'MiddleSchool', 'HighSchool', 'CollegeUniversity'], required: true },
   meanings: [meaningSchema],
 }, { timestamps: true });
-
+  
 
 const Words = mongoose.model('Words', wordSchema);
 

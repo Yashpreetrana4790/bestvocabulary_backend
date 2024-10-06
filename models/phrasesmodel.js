@@ -14,9 +14,8 @@ const phraseSchema = new Schema({
       antonyms: [{ type: String }],
     }
   ],
-  examples: [exampleSchema],
-  synonyms: [{ type: String }],
-  antonyms: [{ type: String }],
+  words: [{ type: Schema.Types.ObjectId, ref: 'Word' }],
+
 }, { timestamps: true });
 
 // Create the Phrase model
