@@ -20,10 +20,11 @@ router.get('/words', async (req, res) => {
 })
 
 router.post('/words', async (req, res) => {
-  const { word, idioms, phrases, pronunciation, partOfSpeech, meanings } = req.body;
+  const { word, pronunciation, level, meanings, idioms, phrases } = req.body;
 
-  if (!word) {
-    return res.status(400).json({ error: 'Word is required' });
+  console.log("word:", word, "pronunciation:", pronunciation, "level:", level, "meanings:", meanings, "idioms:", idioms, "phrases:", phrases);
+  if (!word || !meanings) {
+    return res.status(400).json({ error: 'Word and meanings are required' });
   }
 
   try {
@@ -33,11 +34,10 @@ router.post('/words', async (req, res) => {
       return res.status(400).json({ error: 'Word already exists in the database' });
     }
 
-    // Create the new word
     const newWord = await Words.create({
       word,
       pronunciation,
-      partOfSpeech,
+      level,
       meanings,
     });
 
@@ -45,66 +45,57 @@ router.post('/words', async (req, res) => {
       return res.status(400).json({ error: 'Failed to create word' });
     }
 
-    // Handle idioms if provided
+    // Initialize arrays for idioms and phrases if they exist
     let idiomIds = [];
+    let phraseIds = [];
 
+    // Process idioms if provided
     if (idioms && idioms.length > 0) {
       for (const idiomData of idioms) {
-        const updateData = {};
-    
-        if (idiomData.definition) updateData.definition = idiomData.definition;
-        if (idiomData.examples) updateData.examples = idiomData.examples;
-        if (idiomData.synonyms) updateData.synonyms = idiomData.synonyms;
-        if (idiomData.antonyms) updateData.antonyms = idiomData.antonyms;
-    
         const updatedIdiom = await Idiom.findOneAndUpdate(
-          { phrase: { $regex: new RegExp(`^${idiomData.phrase}$`, "i") } },  // Case-insensitive match for the phrase
+          { idiom: { $regex: new RegExp(`^${idiomData.idiom}$`, "i") } },
           {
-            $setOnInsert: { phrase: idiomData.phrase, ...updateData },  // Insert with the new fields only if idiom doesn't exist
-            $addToSet: { words: newWord._id } 
+            $setOnInsert: { ...idiomData },
+            $addToSet: { words: newWord._id }
           },
-          { upsert: true, new: true }  
+          { upsert: true, new: true }
         );
-        
-        idiomIds.push(updatedIdiom._id);  
+        idiomIds.push(updatedIdiom._id);
       }
     }
-    
 
-
-    // Handle phrases if provided
-    let phraseIds = [];
+    // Process phrases if provided
     if (phrases && phrases.length > 0) {
       for (const phraseData of phrases) {
-        const existingPhrase = await Phrase.findOne({ phrase: phraseData.phrase });
-
-        if (existingPhrase) {
-          // Update the phrase if necessary
-          existingPhrase.meanings = phraseData.meanings;
-          existingPhrase.examples = phraseData.examples;
-          existingPhrase.synonyms = phraseData.synonyms;
-          existingPhrase.antonyms = phraseData.antonyms;
-          await existingPhrase.save();
-          phraseIds.push(existingPhrase._id);
-        } else {
-          // Create a new phrase
-          const newPhrase = await Phrase.create({ ...phraseData });
-          phraseIds.push(newPhrase._id);
-        }
+        const updatedPhrase = await Phrase.findOneAndUpdate(
+          { phrase: { $regex: new RegExp(`^${phraseData.phrase}$`, "i") } },
+          {
+            $setOnInsert: { ...phraseData },  // Insert if not found
+            $addToSet: { words: newWord._id }  // Link word to phrase
+          },
+          { upsert: true, new: true }
+        );
+        phraseIds.push(updatedPhrase._id);
       }
     }
 
+    // Save idioms and phrases to the word
     newWord.idioms = idiomIds;
     newWord.phrases = phraseIds;
     await newWord.save();
 
-    res.status(201).json({ message: 'Word, idioms, and phrases added successfully', word: newWord });
+    res.json(201).json({
+      status: true,
+      message: 'Word, idioms, and phrases added successfully',
+      word: newWord
+    });
 
   } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    console.error('Error occurred:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message });
   }
 });
+
 
 export default router;
 
