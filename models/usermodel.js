@@ -8,12 +8,12 @@ const userSchema = new Schema({
     required: true,
     trim: true,
     lowercase: true,
-    unique: true // This ensures that emails are unique
+    unique: true
   },
   password: {
     type: String,
     required: true,
-    minlength: 6 // Minimum length for password
+    minlength: 6
   },
   fullName: {
     type: String,
@@ -23,9 +23,18 @@ const userSchema = new Schema({
   role: {
     type: String,
     required: true,
-    enum: ['student', 'admin'], // Adjust roles as needed
+    enum: ['student', 'admin'],
     default: 'student'
+  },
+  savedQuestions: [{
+    type: Schema.Types.ObjectId,
+    ref: 'Question'
+  }],
+  createdAt: {
+    type: Date,
+    default: Date.now
   }
+
 });
 
 // Create the User model

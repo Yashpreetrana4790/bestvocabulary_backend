@@ -16,6 +16,7 @@ app.use(express.json());
 app.use("/api/v1/user", userrouter);
 app.use("/api/v1/admin", wordsrouter);
 
+
 // Start server
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
