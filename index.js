@@ -1,6 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import userrouter from './routes/user.js';
 import wordsrouter from './routes/words.js';
 import 'dotenv/config';
 import './db.js';  
@@ -13,7 +12,6 @@ app.use(cors({ origin: '*' }));
 app.use(express.json()); 
 
 // Routes
-app.use("/api/v1/user", userrouter);
 app.use("/api/v1/admin", wordsrouter);
 
 
