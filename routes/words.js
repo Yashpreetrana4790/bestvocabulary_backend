@@ -6,36 +6,45 @@ const router = express.Router();
 // Get all words with pagination and filtering
 router.get('/words', async (req, res) => {
   try {
-    const { page = 1, limit = 10, search = '', category } = req.query;
-    const query = {};
+    // Convert page and limit to numbers, ensuring they default to valid values
+    const page = Math.max(Number(req.query.page) || 1, 1); // Ensure page is at least 1
+    const limit = Math.max(Number(req.query.limit) || 10, 1); // Ensure limit is at least 1
+    const search = req.query.search || '';
+    const category = req.query.category;
 
+    // Construct query object
+    const query = {};
     if (search) {
       query.word = { $regex: search, $options: 'i' };
     }
-
     if (category) {
       query['meanings.category'] = category;
     }
 
+    // Fetch words with pagination
     const words = await Word.find(query)
       .select('-__v')
-      .limit(limit * 1)
+      .limit(limit)
       .skip((page - 1) * limit)
       .exec();
 
+    // Get total count of matching words
     const count = await Word.countDocuments(query);
 
+    // Send response
     res.json({
       total: count,
-      page: Number(page),
+      page,
       pages: Math.ceil(count / limit),
       words,
     });
+
   } catch (error) {
-    console.error('Error:', error);
-    res.status(500).send('Internal Server Error');
+    console.error('Error fetching words:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
 
 // Get a single word by ID
 router.get('/words/:id', async (req, res) => {
