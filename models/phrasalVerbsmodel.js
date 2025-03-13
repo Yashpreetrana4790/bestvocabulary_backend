@@ -10,7 +10,6 @@ const phrasalVerbSchema = new Schema({
   synonyms: [{ type: String }],
   antonyms: [{ type: String }],
   relatedWords: [{ type: String }],
-  word: { type: Schema.Types.ObjectId, ref: "Word", required: true } // Linking to Word
 });
 
 const PhrasalVerb = mongoose.model("PhrasalVerb", phrasalVerbSchema);

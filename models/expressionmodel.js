@@ -10,7 +10,6 @@ const expressionSchema = new Schema({
   },
   type: {
     type: String,
-    enum: ["Idiom", "Phrase", "Collocation", "Phrasal Verb"],
     required: true
   },
   pronunciation: {

@@ -22,3 +22,4 @@ package-lock.json
 
 # Ignore any sensitive or generated files
 config/*.config.js
+.qodo

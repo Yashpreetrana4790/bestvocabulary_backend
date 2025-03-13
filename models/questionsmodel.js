@@ -3,7 +3,6 @@ import mongoose from "mongoose";
 const questionSchema = new mongoose.Schema({
   type: {
     type: String,
-    enum: ["multiple-choice", "fill-in-the-blank", "scenario-based"],
     required: true
   },
   description: {
@@ -22,13 +21,13 @@ const questionSchema = new mongoose.Schema({
   },
   difficulty: {
     type: String,
-    enum: ["Easy", "Medium", "Hard"],
-    required: true
   },
-  options: {
-    type: [String], // Ensures it's an array of strings
-    default: [] // Allows empty arrays for non-multiple-choice questions
-  }
+  options: [
+    {
+      type: mongoose.Schema.Types.Mixed, // Accepts both string and object
+      required: true
+    }
+  ]
 });
 
 const Question = mongoose.model("Question", questionSchema);

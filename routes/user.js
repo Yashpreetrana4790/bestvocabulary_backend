@@ -34,7 +34,6 @@ const changePasswordSchema = z.object({
 router.post('/register', async (req, res) => {
   try {
     const { email, fullName, password, confirmPassword } = req.body;
-    console.log("email:", email, "fullName:", fullName, "password:", password, "confirmPassword:", confirmPassword);
 
     if (!email || !fullName || !password || !confirmPassword) {
       console.log("All fields are required");

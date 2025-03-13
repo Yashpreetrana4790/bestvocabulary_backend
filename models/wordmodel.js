@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-import PhrasalVerb from "./phraselVerbsmodel";
 
 const wordSchema = new mongoose.Schema({
   word: {
@@ -12,11 +11,9 @@ const wordSchema = new mongoose.Schema({
   },
   frequency: {
     type: String,
-    enum: ["low", "medium", "high"]
   },
   overall_tone: {
     type: String,
-    enum: ["formal", "informal", "neutral"]
   },
   etymology: {
     type: String
@@ -65,14 +62,12 @@ const wordSchema = new mongoose.Schema({
       ],
       tone: {
         type: String,
-        enum: ["neutral", "formal", "informal"]
       },
       category: {
         type: String
       },
       difficulty: {
         type: String,
-        enum: ["Beginner","Easy", "Intermediate", "Advanced",]
       },
       meaning: {
         type: String,
@@ -94,14 +89,8 @@ const wordSchema = new mongoose.Schema({
       notes: {
         type: String
       },
-      synonyms: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Word"
-      }],
-      antonyms: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Word"
-      }],
+      synonyms: [{ type: mongoose.Schema.Types.ObjectId, ref: "Word" }],
+      antonyms: [{ type: mongoose.Schema.Types.ObjectId, ref: "Word" }]
     }
   ],
   expressions: [{
@@ -112,26 +101,14 @@ const wordSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "PhrasalVerb"
   }],
+  historical_usage: String,
+  collocations: [mongoose.Schema.Types.Mixed],
   questions: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: "Question"
   }],
-  additional_info: {
-    collocations: {
-      type: [String],
-      default: []
-    },
-    historical_usage: {
-      type: String
-    },
-    root_analysis: {
-      origin_language: {
-        type: String
-      },
-      meaning: {
-        type: String
-      }
-    }
+  root_analysis: {
+    type: mongoose.Schema.Types.Mixed
   }
 })
 
