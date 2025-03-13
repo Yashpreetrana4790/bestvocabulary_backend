@@ -2,11 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import 'dotenv/config';
 import './db.js';
-import fs from 'fs/promises';
-import PhrasalVerb from './models/phrasalVerbsmodel.js';
-import Expression from './models/expressionmodel.js';
-import Question from './models/questionsmodel.js';
-import Word from './models/wordmodel.js';
+import userrouter from './routes/user.js';
+import wordsrouter from './routes/words.js';
+
 
 const app = express();
 const port = process.env.PORT || 8000;
@@ -15,8 +13,9 @@ const port = process.env.PORT || 8000;
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
-  
 
+app.use("/api/v1/user", userrouter);
+app.use("/api/v1/words", wordsrouter)
 // Start server
 app.listen(port, () => {
   console.log(`🚀 Server is running on port ${port}`);
