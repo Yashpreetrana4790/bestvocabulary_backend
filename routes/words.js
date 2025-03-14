@@ -9,26 +9,33 @@ router.get("/words", async (req, res) => {
 
     let query = {};
 
-    // Search filter
-    if (search) {
-      query.word = { $regex: new RegExp(search, "i") }; // Case-insensitive search
-    }
+    let wordFilters = [];
 
-    // Difficulty filter
-    if (difficulty) {
-      query.difficulty = difficulty; // Assuming "difficulty" is stored as a field
+    // Search filter (fuzzy search)
+    if (search) {
+      wordFilters.push({ word: { $regex: new RegExp(search, "i") } });
     }
 
     // Word Length filter
     if (length) {
-      if (length === "short") query.word = { $regex: /^.{1,4}$/ };
-      else if (length === "medium") query.word = { $regex: /^.{5,8}$/ };
-      else if (length === "long") query.word = { $regex: /^.{9,}$/ };
+      if (length === "short") wordFilters.push({ word: { $regex: /^.{1,4}$/ } });
+      else if (length === "medium") wordFilters.push({ word: { $regex: /^.{5,8}$/ } });
+      else if (length === "long") wordFilters.push({ word: { $regex: /^.{9,}$/ } });
     }
 
     // Starts with letter filter
     if (startsWith) {
-      query.word = { $regex: `^${startsWith}`, $options: "i" }; // Words starting with letter
+      wordFilters.push({ word: { $regex: `^${startsWith}`, $options: "i" } });
+    }
+
+    // Combine word-related filters
+    if (wordFilters.length > 0) {
+      query.$and = wordFilters;
+    }
+
+    // Difficulty filter (applies separately)
+    if (difficulty) {
+      query.difficulty = difficulty;
     }
 
     const words = await WordModel.find(query)
@@ -43,6 +50,7 @@ router.get("/words", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch words" });
   }
 });
+
 
 
 // Get a single word by ID
