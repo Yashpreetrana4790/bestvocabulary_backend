@@ -3,45 +3,44 @@ import Word from '../models/wordmodel.js';
 
 const router = express.Router();
 
-// Get all words with pagination and filtering
-router.get('/words', async (req, res) => {
+router.get("/words", async (req, res) => {
   try {
-    // Convert page and limit to numbers, ensuring they default to valid values
-    const page = Math.max(Number(req.query.page) || 1, 1); // Ensure page is at least 1
-    const limit = Math.max(Number(req.query.limit) || 10, 1); // Ensure limit is at least 1
-    const search = req.query.search || '';
-    const category = req.query.category;
+    const { page = 1, limit = 12, search, difficulty, length, startsWith } = req.query;
 
-    // Construct query object
-    const query = {};
+    let query = {};
+
+    // Search filter
     if (search) {
-      query.word = { $regex: search, $options: 'i' };
-    }
-    if (category) {
-      query['meanings.category'] = category;
+      query.word = { $regex: new RegExp(search, "i") }; // Case-insensitive search
     }
 
-    // Fetch words with pagination
-    const words = await Word.find(query)
-      .select('-__v')
-      .limit(limit)
-      .skip((page - 1) * limit)
-      .exec();
+    // Difficulty filter
+    if (difficulty) {
+      query.difficulty = difficulty; // Assuming "difficulty" is stored as a field
+    }
 
-    // Get total count of matching words
-    const count = await Word.countDocuments(query);
+    // Word Length filter
+    if (length) {
+      if (length === "short") query.word = { $regex: /^.{1,4}$/ };
+      else if (length === "medium") query.word = { $regex: /^.{5,8}$/ };
+      else if (length === "long") query.word = { $regex: /^.{9,}$/ };
+    }
 
-    // Send response
-    res.json({
-      total: count,
-      page,
-      pages: Math.ceil(count / limit),
-      words,
-    });
+    // Starts with letter filter
+    if (startsWith) {
+      query.word = { $regex: `^${startsWith}`, $options: "i" }; // Words starting with letter
+    }
 
+    const words = await WordModel.find(query)
+      .limit(parseInt(limit))
+      .skip((parseInt(page) - 1) * parseInt(limit));
+
+    const total = await WordModel.countDocuments(query);
+
+    res.json({ words, total });
   } catch (error) {
-    console.error('Error fetching words:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    console.error("Error fetching words:", error);
+    res.status(500).json({ error: "Failed to fetch words" });
   }
 });
 

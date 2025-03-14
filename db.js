@@ -1,10 +1,8 @@
 import 'dotenv/config';
 import mongoose from 'mongoose';
 
-console.log("Starting db.js execution");  // Log at the beginning
 
 const mongoUri = process.env.MONGO_URI;
-console.log("Mongo URI: ", mongoUri);
 
 mongoose.connect(mongoUri, {
   useNewUrlParser: true,
