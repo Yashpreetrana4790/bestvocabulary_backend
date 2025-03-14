@@ -38,11 +38,11 @@ router.get("/words", async (req, res) => {
       query.difficulty = difficulty;
     }
 
-    const words = await WordModel.find(query)
+    const words = await Word.find(query)
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit));
 
-    const total = await WordModel.countDocuments(query);
+    const total = await Word.countDocuments(query);
 
     res.json({ words, total });
   } catch (error) {
