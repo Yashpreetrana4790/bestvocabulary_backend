@@ -73,12 +73,12 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // Hash the password
+ 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     console.log("hashedPassword:", hashedPassword);
 
-    // Create new user
+ 
     const newUser = await User.create({
       email,
       fullName,
@@ -125,7 +125,7 @@ router.post('/register', async (req, res) => {
 
 });
 
-// Token generation function
+
 const generateToken = (userId, email) => {
   return jwt.sign(
     { userId, email },

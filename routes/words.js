@@ -7,14 +7,23 @@ router.get("/words", async (req, res) => {
   try {
     const { page = 1, limit = 12, search, difficulty, length, startsWith } = req.query;
 
+
+    const difficultyMapping = {
+      Beginner: ["Easy", "Beginner"],    // "Beginner" maps to ["Easy", "Beginner"]
+      Intermediate: ["Medium", "Intermediate"], // "Intermediate" maps to ["Medium", "Intermediate"]
+      Advanced: ["Hard", "Advanced"],     // "Advanced" maps to ["Hard", "Advanced"]
+    };
+
     let query = {};
 
     let wordFilters = [];
 
-    // Search filter (fuzzy search)
+
+
     if (search) {
       wordFilters.push({ word: { $regex: new RegExp(search, "i") } });
     }
+
 
     // Word Length filter
     if (length) {
@@ -33,16 +42,23 @@ router.get("/words", async (req, res) => {
       query.$and = wordFilters;
     }
 
+
     // Difficulty filter (applies separately)
     if (difficulty) {
-      query.difficulty = difficulty;
+      const dbDifficulties = difficultyMapping[difficulty];
+
+      if (dbDifficulties) {
+        query["meanings.difficulty"] = { $in: dbDifficulties };
+      } else {
+        console.log("Invalid difficulty level");
+      }
     }
 
     const words = await Word.find(query)
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit));
 
-    const total = await Word.countDocuments(query);
+    const total = words.length;
 
     res.json({ words, total });
   } catch (error) {

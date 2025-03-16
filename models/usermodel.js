@@ -25,7 +25,7 @@ const userSchema = new Schema({
     required: true,
     enum: ['student', 'admin'],
     default: 'student'
-  },
+  },  
   savedQuestions: [{
     type: Schema.Types.ObjectId,
     ref: 'Question'

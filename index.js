@@ -4,6 +4,7 @@ import 'dotenv/config';
 import './db.js';
 import userrouter from './routes/user.js';
 import wordsrouter from './routes/words.js';
+import wordOfTheDayRouter from './routes/wordOfTheDay.js';
 
 
 const app = express();
@@ -16,6 +17,7 @@ app.use(express.json());
 
 app.use("/api/v1/user", userrouter);
 app.use("/api/v1/words", wordsrouter)
+app.use("/api/v1/word-of-the-day", wordOfTheDayRouter); // New route
 // Start server
 app.listen(port, () => {
   console.log(`🚀 Server is running on port ${port}`);

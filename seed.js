@@ -1,3 +1,5 @@
+import Word from "./models/wordmodel";
+
 // Function to check for existing records and return ObjectId
 const getOrCreate = async (Model, query, data) => {
   try {
@@ -62,46 +64,48 @@ const processWordList = async () => {
           try {
             // Check if the phrasal verb already exists
             const existingVerb = await PhrasalVerb.findOne({ phrase: phrasalVerb.phrase });
-      
+
             if (existingVerb) {
               console.log(`🔹 Skipping duplicate: ${phrasalVerb.phrase}`);
               return existingVerb._id; // Return existing ID
             }
-      
+
             // If not found, insert new
-      
+
           } catch (error) {
             console.error("❌ Error processing phrasal verb:", phrasalVerb.phrase, error);
             return null; // Handle errors gracefully
           }
         })
       );
-      
 
-  // Convert `expressions` into ObjectIds
-  const expressionIds = await Promise.all(
-    (wordData.expressions ?? []).map(async (expression) => {
-      try {
-        // Try inserting a new document
-        const expr = await Expression.create(expression);
-        return expr._id; // Return the new ObjectId if inserted
-      } catch (error) {
-        if (error.code === 11000) {
-          // Duplicate key error, find the existing document
-          const existingExpr = await Expression.findOne({    expression: expression.expression, 
-            type: expression.type  });
-  
-          return existingExpr ? existingExpr._id : null; // Return existing ID if found
-        }
-  
-        console.error("❌ Error processing expression:", expression.text, error);
-        return null; // Handle other errors
-      }
-    })
-  );
-  
-  
-  
+
+      // Convert `expressions` into ObjectIds
+      const expressionIds = await Promise.all(
+        (wordData.expressions ?? []).map(async (expression) => {
+          try {
+            // Try inserting a new document
+            const expr = await Expression.create(expression);
+            return expr._id; // Return the new ObjectId if inserted
+          } catch (error) {
+            if (error.code === 11000) {
+              // Duplicate key error, find the existing document
+              const existingExpr = await Expression.findOne({
+                expression: expression.expression,
+                type: expression.type
+              });
+
+              return existingExpr ? existingExpr._id : null; // Return existing ID if found
+            }
+
+            console.error("❌ Error processing expression:", expression.text, error);
+            return null; // Handle other errors
+          }
+        })
+      );
+
+
+
 
 
       // Create word document
