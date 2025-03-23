@@ -25,25 +25,21 @@ router.get("/words", async (req, res) => {
     }
 
 
-    // Word Length filter
     if (length) {
       if (length === "short") wordFilters.push({ word: { $regex: /^.{1,4}$/ } });
       else if (length === "medium") wordFilters.push({ word: { $regex: /^.{5,8}$/ } });
       else if (length === "long") wordFilters.push({ word: { $regex: /^.{9,}$/ } });
     }
 
-    // Starts with letter filter
     if (startsWith) {
       wordFilters.push({ word: { $regex: `^${startsWith}`, $options: "i" } });
     }
 
-    // Combine word-related filters
     if (wordFilters.length > 0) {
       query.$and = wordFilters;
     }
 
 
-    // Difficulty filter (applies separately)
     if (difficulty) {
       const dbDifficulties = difficultyMapping[difficulty];
 
@@ -67,13 +63,17 @@ router.get("/words", async (req, res) => {
   }
 });
 
-
-
-// Get a single word by ID
-router.get('/words/:id', async (req, res) => {
+// Get a single word by word field
+router.get('/words/:word', async (req, res) => {
   try {
-    const word = await Word.findById(req.params.id).populate('synonyms antonyms expressions PhrasalVerbs questions');
-    if (!word) return res.status(404).json({ message: 'Word not found' });
+    console.log(req.params.word, "Received word");
+
+    const word = await Word.findOne({ word: req.params.word.toLowerCase() }).populate({ path: 'synonyms antonyms expressions PhrasalVerbs questions', strictPopulate: false });
+
+    if (!word) {
+      return res.status(404).json({ message: 'Word not found' });
+    }
+
     res.json(word);
   } catch (error) {
     console.error('Error:', error);
@@ -81,18 +81,30 @@ router.get('/words/:id', async (req, res) => {
   }
 });
 
-// Get a random word
 router.get('/words/random', async (req, res) => {
   try {
-    const count = await Word.countDocuments();
-    const randomIndex = Math.floor(Math.random() * count);
-    const randomWord = await Word.findOne().skip(randomIndex);
+    const ids = await Word.find({}, { _id: 1 }).lean(); // Get all _id values
+
+    if (!ids.length) {
+      return res.status(404).json({ message: 'No words found' });
+    }
+
+    const randomId = ids[Math.floor(Math.random() * ids.length)]._id; // Pick a random _id
+
+    if (!mongoose.Types.ObjectId.isValid(randomId)) { // Ensure it's a valid ObjectId
+      return res.status(400).json({ message: 'Invalid ObjectId' });
+    }
+
+    const randomWord = await Word.findById(randomId);
+
     res.json(randomWord);
   } catch (error) {
-    console.error('Error:', error);
-    res.status(500).send('Internal Server Error');
+    console.error('Error fetching random word:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
   }
 });
+
+
 
 // Create a new word
 router.post('/words', async (req, res) => {
@@ -117,7 +129,6 @@ router.put('/words/:id', async (req, res) => {
   }
 });
 
-// Delete a word
 router.delete('/words/:id', async (req, res) => {
   try {
     const deletedWord = await Word.findByIdAndDelete(req.params.id);

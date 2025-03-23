@@ -6,6 +6,11 @@ import userrouter from './routes/user.js';
 import wordsrouter from './routes/words.js';
 import wordOfTheDayRouter from './routes/wordOfTheDay.js';
 
+import './models/expressionmodel.js';
+import './models/phrasalVerbsmodel.js';
+import './models/questionsmodel.js';
+import './models/wordmodel.js';
+
 
 const app = express();
 const port = process.env.PORT || 8000;
