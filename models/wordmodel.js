@@ -8,7 +8,8 @@ const wordSchema = new mongoose.Schema({
     unique: true
   },
   pronunciation: {
-    type: String
+    type: String,
+    required : true
   },
   frequency: {
     type: String,

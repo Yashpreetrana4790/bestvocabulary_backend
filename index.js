@@ -5,6 +5,9 @@ import './db.js';
 import userrouter from './routes/user.js';
 import wordsrouter from './routes/words.js';
 import wordOfTheDayRouter from './routes/wordOfTheDay.js';
+import adminrouter from './routes/admin.js';
+import questionsrouter from './routes/questions.js'
+import phraserouter from './routes/phrase.js';
 
 import './models/expressionmodel.js';
 import './models/phrasalVerbsmodel.js';
@@ -22,7 +25,10 @@ app.use(express.json());
 
 app.use("/api/v1/user", userrouter);
 app.use("/api/v1/words", wordsrouter)
-app.use("/api/v1/word-of-the-day", wordOfTheDayRouter); // New route
+app.use("/api/v1/questions", questionsrouter)
+app.use("/api/v1/word-of-the-day", wordOfTheDayRouter);
+app.use("/api/v1/phrase", phraserouter);
+app.use("/api/v1/admin", adminrouter);
 // Start server
 app.listen(port, () => {
   console.log(`🚀 Server is running on port ${port}`);
