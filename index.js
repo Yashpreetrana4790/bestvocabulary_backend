@@ -25,19 +25,11 @@ import wordOfTheDayRouter from './routes/wordOfTheDay.js';
 import adminrouter from './routes/admin.js';
 import questionsrouter from './routes/questions.js'
 import phraserouter from './routes/phrase.js';
-import idiomsrouter from './routes/idioms.js';
-import categoriesrouter from './routes/categories.js';
-import categoryrouter from './routes/categoryRoutes.js';
 
 import './models/expressionmodel.js';
 import './models/phrasalVerbsmodel.js';
-import './models/idiomsmodel.js';
 import './models/questionsmodel.js';
 import './models/wordmodel.js';
-import './models/homophonesmodel.js';
-import './models/homonymsmodel.js';
-import './models/confusedwordsmodel.js';
-import './models/categorymodel.js';
 
 
 const app = express();
@@ -52,32 +44,28 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
   : process.env.NODE_ENV === 'production'
     ? [] // Must be set in production
-    : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:8000', 'http://localhost:8081', 'http://localhost:8082', 'http://127.0.0.1:8081', 'http://127.0.0.1:8082']; // Development defaults
+    : ['http://localhost:3000', 'http://localhost:3001']; // Development defaults
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, React Native, Expo, Postman, etc.)
-    // This is safe in development, and mobile apps typically don't send origin headers
-    if (!origin) {
-      // In production, you might want to be more strict, but for mobile apps we need to allow this
+    // Allow requests with no origin (mobile apps, Postman, etc.) only in development
+    if (!origin && process.env.NODE_ENV !== 'production') {
       return callback(null, true);
     }
 
-    // Check if origin is in allowed list
+    if (!origin) {
+      return callback(new Error('CORS: No origin header'));
+    }
+
     if (allowedOrigins.includes(origin) || allowedOrigins.length === 0) {
       callback(null, true);
     } else {
-      // In development, log the blocked origin for debugging
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn(`⚠️ CORS: Blocked origin: ${origin}. Allowed origins: ${allowedOrigins.join(', ')}`);
-      }
       callback(new Error(`CORS: Origin ${origin} is not allowed`));
     }
   },
   credentials: true, // Allow cookies/credentials
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   maxAge: 86400 // 24 hours
 }));
 
@@ -120,11 +108,6 @@ app.use((req, res, next) => {
 // 4. Request logging middleware (basic - consider using morgan for production)
 app.use((req, res, next) => {
   const start = Date.now();
-  
-  // Log all incoming requests in development
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`📥 ${req.method} ${req.originalUrl} - Path: ${req.path}`);
-  }
 
   res.on('finish', () => {
     const duration = Date.now() - start;
@@ -141,15 +124,11 @@ app.use((req, res, next) => {
 
 // Routes
 app.use("/api/v1/user", userrouter);
-app.use("/api/v1/words", wordsrouter);
-console.log('✅ Words router mounted at /api/v1/words');
+app.use("/api/v1/words", wordsrouter)
 app.use("/api/v1/questions", questionsrouter)
 app.use("/api/v1/word-of-the-day", wordOfTheDayRouter);
 app.use("/api/v1/phrase", phraserouter);
-app.use("/api/v1/idioms", idiomsrouter);
 app.use("/api/v1/admin", adminrouter);
-app.use("/api/v1/categories", categoriesrouter);
-app.use("/api/v1/category", categoryrouter);
 
 // 5. 404 Handler - Must be after all routes
 app.use((req, res) => {

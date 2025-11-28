@@ -5,13 +5,7 @@ import mongoose from 'mongoose';
 
 const router = express.Router();
 
-router.get("/", async (req, res) => {
-  console.log('=== WORDS ROUTE HIT ===');
-  console.log('Method:', req.method);
-  console.log('Path:', req.path);
-  console.log('Original URL:', req.originalUrl);
-  console.log('Query:', req.query);
-  
+router.get("/words", async (req, res) => {
   try {
     const { 
       page = 1, 
@@ -23,35 +17,13 @@ router.get("/", async (req, res) => {
       exactLetters,
       minLetters,
       maxLetters,
-      onlyAlphabets,
-      minMeanings,
-      pos, // Part of Speech filter
-      sortBy // Sort option
+      onlyAlphabets
     } = req.query;
 
-    // Normalize difficulty: 
-    // - Easy and Beginner are treated as the same
-    // - Medium and Intermediate are treated as the same
-    // - Hard and Advanced are treated as the same
-    const normalizeDifficulty = (diff) => {
-      if (!diff) return diff;
-      const lower = diff.toLowerCase();
-      if (lower === 'easy' || lower === 'beginner') {
-        return 'Beginner'; // Standardize on 'Beginner'
-      }
-      if (lower === 'medium' || lower === 'intermediate') {
-        return 'Intermediate'; // Standardize on 'Intermediate'
-      }
-      if (lower === 'hard' || lower === 'advanced') {
-        return 'Advanced'; // Standardize on 'Advanced'
-      }
-      return diff;
-    };
-
     const difficultyMapping = {
-      Beginner: ["Easy", "Beginner", "easy", "beginner"],
-      Intermediate: ["Medium", "Intermediate", "medium", "intermediate"],
-      Advanced: ["Hard", "Advanced", "hard", "advanced"],
+      Beginner: ["Easy", "Beginner"],
+      Intermediate: ["Medium", "Intermediate"],
+      Advanced: ["Hard", "Advanced"],
     };
 
     let query = {};
@@ -142,60 +114,21 @@ router.get("/", async (req, res) => {
       wordFilters.push({ word: { $regex: /^[a-zA-Z]+$/ } });
     }
 
-    // Minimum number of meanings filter - add to wordFilters array
-    if (minMeanings) {
-      const minMeaningsCount = parseInt(minMeanings);
-      if (!isNaN(minMeaningsCount) && minMeaningsCount > 0) {
-        // Filter words that have at least minMeaningsCount meanings
-        // Use $expr to check the size of the meanings array
-        wordFilters.push({
-          $expr: {
-            $gte: [{ $size: { $ifNull: ["$meanings", []] } }, minMeaningsCount]
-          }
-        });
-        console.log(`Min meanings filter applied: ${minMeaningsCount} meanings minimum`);
-      }
-    }
-
-    // Part of Speech filter
-    if (pos) {
-      wordFilters.push({
-        "meanings.pos": { $regex: new RegExp(`^${pos}$`, 'i') }
-      });
-    }
-
-    // Combine all filter conditions first
+    // Combine all filter conditions
     if (wordFilters.length > 0) {
       query.$and = wordFilters;
     }
 
-    // Handle difficulty filter - combine with existing filters properly
     if (difficulty) {
-      const normalizedDifficulty = normalizeDifficulty(difficulty);
-      const dbDifficulties = difficultyMapping[normalizedDifficulty];
+      const dbDifficulties = difficultyMapping[difficulty];
       if (dbDifficulties) {
-        // Use $or with $regex to match all variants (Medium, Intermediate, medium, intermediate, etc.)
-        // Escape special regex characters and create case-insensitive patterns
-        const difficultyConditions = dbDifficulties.map(d => ({
-          "meanings.difficulty": { 
-            $regex: `^${d.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 
-            $options: 'i' 
-          }
-        }));
-        
-        // If we already have $and from other filters, add difficulty as another condition
-        if (query.$and) {
-          query.$and.push({ $or: difficultyConditions });
-        } else {
-          // No other filters, just add difficulty
-          query.$or = difficultyConditions;
-        }
+        query["meanings.difficulty"] = { $in: dbDifficulties };
       }
     }
 
     // Log query for debugging
     console.log('=== WORDS QUERY DEBUG ===');
-    console.log('All query params:', { page, limit, search, difficulty, length, startsWith, exactLetters, minLetters, maxLetters, onlyAlphabets, minMeanings });
+    console.log('All query params:', { page, limit, search, difficulty, length, startsWith, exactLetters, minLetters, maxLetters, onlyAlphabets });
     console.log('Number of wordFilters:', wordFilters.length);
     console.log('wordFilters:', JSON.stringify(wordFilters, null, 2));
     if (exactLetters) {
@@ -213,95 +146,14 @@ router.get("/", async (req, res) => {
     const limitNum = parseInt(limit) || 12;
     const skip = (pageNum - 1) * limitNum;
 
-    // Build sort object based on sortBy parameter
-    let sortObject = {};
-    let needsPostSort = false;
-    
-    if (sortBy) {
-      switch (sortBy) {
-        case 'alphabetical':
-          sortObject = { word: 1 };
-          break;
-        case 'reverse':
-          sortObject = { word: -1 };
-          break;
-        case 'length':
-          // Sort by word length ascending - use aggregation or post-sort
-          needsPostSort = true;
-          break;
-        case 'lengthDesc':
-          // Sort by word length descending
-          needsPostSort = true;
-          break;
-        case 'recent':
-          sortObject = { createdAt: -1 };
-          break;
-        case 'popular':
-          // Sort by frequency or usage (if available)
-          sortObject = { frequency: -1, createdAt: -1 };
-          break;
-        default:
-          sortObject = { word: 1 }; // Default alphabetical
-      }
-    } else {
-      sortObject = { word: 1 }; // Default alphabetical
-    }
-
     // Get total count and paginated results
-    let wordsQuery = Word.find(query);
-    
-    // Apply sorting (skip if we need post-sort)
-    if (!needsPostSort) {
-      wordsQuery = wordsQuery.sort(sortObject);
-    } else {
-      // For length-based sorting, sort by word first, then post-process
-      wordsQuery = wordsQuery.sort({ word: 1 });
-    }
-
     const [words, totalCount] = await Promise.all([
-      wordsQuery
+      Word.find(query)
         .skip(skip)
         .limit(limitNum)
         .lean(),
       Word.countDocuments(query)
     ]);
-
-    // Post-sort for length-based sorting (MongoDB can't do this with $expr easily)
-    if (needsPostSort) {
-      words.sort((a, b) => {
-        const lenA = a.word.length;
-        const lenB = b.word.length;
-        return sortBy === 'lengthDesc' ? lenB - lenA : lenA - lenB;
-      });
-    }
-
-    // If difficulty filter is applied, sort meanings to prioritize matching difficulty
-    if (difficulty && words.length > 0) {
-      const normalizedDifficulty = normalizeDifficulty(difficulty);
-      const dbDifficulties = difficultyMapping[normalizedDifficulty] || [];
-      const lowerDbDifficulties = dbDifficulties.map(d => d.toLowerCase());
-      
-      words.forEach(word => {
-        if (word.meanings && Array.isArray(word.meanings)) {
-          // Sort meanings: matching difficulty first, then others
-          word.meanings.sort((a, b) => {
-            // Normalize both meanings' difficulties for comparison
-            const aDifficulty = normalizeDifficulty(a.difficulty || '').toLowerCase();
-            const bDifficulty = normalizeDifficulty(b.difficulty || '').toLowerCase();
-            
-            const aMatches = lowerDbDifficulties.includes(aDifficulty);
-            const bMatches = lowerDbDifficulties.includes(bDifficulty);
-            
-            // If both match or both don't match, maintain original order
-            if (aMatches === bMatches) return 0;
-            // If only a matches, a comes first
-            if (aMatches) return -1;
-            // If only b matches, b comes first
-            return 1;
-          });
-        }
-      });
-    }
 
     const totalPages = Math.ceil(totalCount / limitNum);
     const hasNextPage = pageNum < totalPages;
@@ -316,9 +168,7 @@ router.get("/", async (req, res) => {
         itemsPerPage: limitNum,
         hasNextPage,
         hasPrevPage
-      },
-      // Include difficulty context for frontend
-      difficultyContext: difficulty || null
+      }
     });
   } catch (error) {
     console.error("Error fetching words:", error);
@@ -326,8 +176,25 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Get random word - MUST be before /:word route to avoid conflicts
-router.get('/random', async (req, res) => {
+// Get a single word by word field
+router.get('/words/:word', async (req, res) => {
+  try {
+    console.log(req.params.word, "Received word");
+
+    const word = await Word.findOne({ word: req.params.word.toLowerCase() }).populate({ path: 'synonyms antonyms expressions PhrasalVerbs questions', strictPopulate: false });
+
+    if (!word) {
+      return res.status(404).json({ message: 'Word not found' });
+    }
+
+    res.json(word);
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).send('Internal Server Error');
+  }
+});
+
+router.get('/words/random', async (req, res) => {
   try {
     const ids = await Word.find({}, { _id: 1 }).lean(); // Get all _id values
 
@@ -349,108 +216,6 @@ router.get('/random', async (req, res) => {
     res.status(500).json({ message: 'Internal Server Error' });
   }
 });
-
-// Get a single word by word field
-router.get('/:word', async (req, res) => {
-  try {
-    // Express automatically decodes URL parameters, but handle edge cases
-    let wordParam = req.params.word;
-    
-    // Try to decode if it looks encoded (contains %)
-    try {
-      if (wordParam.includes('%')) {
-        wordParam = decodeURIComponent(wordParam);
-      }
-    } catch (e) {
-      // If decoding fails, use the original
-      console.log('Could not decode word param, using as-is:', wordParam);
-    }
-    
-    console.log('Received word param:', req.params.word);
-    console.log('Processing word:', wordParam);
-
-    // Search for the word (case-insensitive)
-    // Try multiple variations: exact match, lowercase, capitalized
-    const word = await Word.findOne({ 
-      $or: [
-        { word: wordParam },
-        { word: wordParam.toLowerCase() },
-        { word: wordParam.toUpperCase() },
-        { word: wordParam.charAt(0).toUpperCase() + wordParam.slice(1).toLowerCase() }
-      ]
-    })
-    .populate({ 
-      path: 'meanings.synonyms',
-      select: 'word pronunciation meanings',
-      strictPopulate: false
-    })
-    .populate({ 
-      path: 'meanings.antonyms',
-      select: 'word pronunciation meanings',
-      strictPopulate: false
-    })
-    .populate({ 
-      path: 'expressions PhrasalVerbs questions', 
-      strictPopulate: false 
-    })
-    .lean();
-
-    if (!word) {
-      console.log(`Word "${wordParam}" not found in database`);
-      return res.status(404).json({ 
-        message: 'Word not found',
-        searchedWord: wordParam
-      });
-    }
-
-    // Check if difficulty filter is provided in query params
-    const difficulty = req.query.difficulty;
-    if (difficulty && word.meanings && Array.isArray(word.meanings)) {
-      // Define normalizeDifficulty function (same as main route)
-      const normalizeDifficulty = (diff) => {
-        if (!diff) return diff;
-        const lower = diff.toLowerCase();
-        if (lower === 'medium' || lower === 'intermediate') {
-          return 'Intermediate';
-        }
-        return diff;
-      };
-
-      const difficultyMapping = {
-        Beginner: ["Easy", "Beginner", "easy", "beginner"],
-        Intermediate: ["Medium", "Intermediate", "medium", "intermediate"],
-        Advanced: ["Hard", "Advanced", "hard", "advanced"],
-      };
-      
-      const normalizedDifficulty = normalizeDifficulty(difficulty);
-      const dbDifficulties = difficultyMapping[normalizedDifficulty] || [];
-      const lowerDbDifficulties = dbDifficulties.map(d => d.toLowerCase());
-      
-      // Sort meanings: matching difficulty first (normalizing both meanings)
-      word.meanings.sort((a, b) => {
-        const aDifficulty = normalizeDifficulty(a.difficulty || '').toLowerCase();
-        const bDifficulty = normalizeDifficulty(b.difficulty || '').toLowerCase();
-        
-        const aMatches = lowerDbDifficulties.includes(aDifficulty);
-        const bMatches = lowerDbDifficulties.includes(bDifficulty);
-        
-        if (aMatches === bMatches) return 0;
-        if (aMatches) return -1;
-        return 1;
-      });
-    }
-
-    console.log('Word found:', word.word);
-    res.json(word);
-  } catch (error) {
-    console.error('Error fetching word:', error);
-    res.status(500).json({ 
-      message: 'Internal Server Error',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
 
 router.put('/word/:id', async (req, res) => {
   try {
@@ -631,61 +396,6 @@ router.put('/words/:wordId/meanings/:meaningId/relationships', async (req, res) 
     res.status(500).json({
       message: 'Internal Server Error',
       error: error.message || error.toString()
-    });
-  }
-});
-
-// Create a new word
-router.post('/word', async (req, res) => {
-  try {
-    const { word, pronunciation, frequency, overall_tone, etymology, misspellings, meanings } = req.body;
-
-    // Validate required fields
-    if (!word || !pronunciation) {
-      return res.status(400).json({ 
-        message: 'Word and pronunciation are required fields' 
-      });
-    }
-
-    // Check if word already exists
-    const existingWord = await Word.findOne({ word: word.toLowerCase() });
-    if (existingWord) {
-      return res.status(400).json({ 
-        message: 'Word already exists' 
-      });
-    }
-
-    // Create new word document
-    const newWord = new Word({
-      word: word.toLowerCase(),
-      pronunciation,
-      frequency: frequency || 'medium',
-      overall_tone,
-      etymology,
-      misspellings: misspellings || [],
-      meanings: meanings || []
-    });
-
-    const savedWord = await newWord.save();
-
-    res.status(201).json({ 
-      success: true, 
-      data: savedWord,
-      message: 'Word created successfully' 
-    });
-  } catch (error) {
-    console.error("Error creating word:", error);
-    
-    // Handle duplicate key error
-    if (error.code === 11000) {
-      return res.status(400).json({ 
-        message: 'Word already exists' 
-      });
-    }
-
-    res.status(500).json({ 
-      message: "Internal Server Error",
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

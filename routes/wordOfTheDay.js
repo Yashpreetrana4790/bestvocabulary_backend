@@ -14,88 +14,22 @@ const router = express.Router();
  */
 router.get("/", async (req, res) => {
   try {
-    // Use consistent date string format (YYYY-MM-DD)
-    const today = moment().format('YYYY-MM-DD');
+    const today = moment().startOf('day').toISOString(); // More precise date handling
 
-    // Check if word of the day exists for today
-    let wordOfTheDay = await Wod.findOne({ 
-      date: today
+    const wordOfTheDay = await Wod.findOne({ 
+      date: {
+        $gte: moment().startOf('day').toDate(),
+        $lte: moment().endOf('day').toDate()
+      }
     }).populate({
       path: 'word',
-      select: '-__v',
-      populate: {
-        path: 'meanings',
-        select: '-__v'
-      }
+      select: '-__v' // Exclude version key
     });
 
-    // If no word of the day for today, set one automatically
     if (!wordOfTheDay) {
-      console.log('No word of the day set for today, setting one automatically...');
-      
-      // Get total count of available words
-      const count = await Word.countDocuments();
-      if (count === 0) {
-        return res.status(404).json({ 
-          success: false,
-          message: "No words available in database",
-          data: null
-        });
-      }
-
-      // Get random word
-      const randomIndex = Math.floor(Math.random() * count);
-      const randomWord = await Word.findOne().skip(randomIndex);
-
-      if (!randomWord) {
-        return res.status(404).json({ 
-          success: false,
-          message: "No valid word found",
-          data: null
-        });
-      }
-
-      // Create word of the day entry
-      try {
-        wordOfTheDay = await Wod.create({
-          word: randomWord._id,
-          date: today
-        });
-
-        // Populate the word
-        await wordOfTheDay.populate({
-          path: 'word',
-          select: '-__v',
-          populate: {
-            path: 'meanings',
-            select: '-__v'
-          }
-        });
-
-        console.log(`Word of the day set automatically: ${randomWord.word}`);
-      } catch (createError) {
-        // Handle race condition - if another request created it
-        if (createError.code === 11000) {
-          wordOfTheDay = await Wod.findOne({ 
-            date: today
-          }).populate({
-            path: 'word',
-            select: '-__v',
-            populate: {
-              path: 'meanings',
-              select: '-__v'
-            }
-          });
-        } else {
-          throw createError;
-        }
-      }
-    }
-
-    if (!wordOfTheDay || !wordOfTheDay.word) {
       return res.status(404).json({ 
         success: false,
-        message: "Word of the day not found",
+        message: "Today's word of the day has not been set yet.",
         data: null
       });
     }
@@ -103,8 +37,7 @@ router.get("/", async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Word of the day retrieved successfully",
-      data: wordOfTheDay.word,
-      word: wordOfTheDay.word // Also include 'word' key for compatibility
+      data: wordOfTheDay.word
     });
   } catch (error) {
     console.error("Error fetching word of the day:", error);
@@ -143,12 +76,14 @@ router.post("/manual", async (req, res) => {
       });
     }
 
-    // Use consistent date string format (YYYY-MM-DD)
-    const today = moment().format('YYYY-MM-DD');
+    const today = moment().startOf('day').toISOString();
 
     // Check if WOD already exists for today
     const existingWod = await Wod.findOne({
-      date: today
+      date: {
+        $gte: moment().startOf('day').toDate(),
+        $lte: moment().endOf('day').toDate()
+      }
     });
 
     if (existingWod) {
@@ -187,11 +122,15 @@ router.post("/manual", async (req, res) => {
  */
 const updateWordOfTheDay = async () => {
   try {
-    // Use consistent date string format (YYYY-MM-DD)
-    const today = moment().format('YYYY-MM-DD');
+    const today = moment().startOf('day').toISOString();
 
     // Check if today's word is already set
-    const existingEntry = await Wod.findOne({ date: today });
+    const existingEntry = await Wod.findOne({
+      date: {
+        $gte: moment().startOf('day').toDate(),
+        $lte: moment().endOf('day').toDate()
+      }
+    });
     
     if (existingEntry) {
       console.log("Word of the day already set for today");
@@ -214,41 +153,14 @@ const updateWordOfTheDay = async () => {
       return;
     }
 
-    // Use findOneAndUpdate with upsert to atomically create or skip
-    // This prevents race conditions and duplicate key errors
-    try {
-      const result = await Wod.findOneAndUpdate(
-        { date: today },
-        {
-          $setOnInsert: {
-            word: randomWord._id,
-            date: today
-          }
-        },
-        {
-          upsert: true,
-          new: true
-        }
-      );
+    // Create new WOD entry
+    await Wod.create({ 
+      word: randomWord._id, 
+      date: today 
+    });
 
-      // If we get here without error, check if it was inserted or updated
-      if (result) {
-        console.log(`Word of the day set: ${randomWord.word || randomWord.term || 'Unknown'}`);
-      }
-    } catch (upsertError) {
-      // Handle duplicate key error gracefully (race condition)
-      if (upsertError.code === 11000) {
-        console.log("Word of the day already set for today (race condition prevented)");
-        return;
-      }
-      throw upsertError; // Re-throw if it's a different error
-    }
+    console.log(`Word of the day updated: ${randomWord.term}`);
   } catch (error) {
-    // Handle duplicate key error gracefully (can happen in race conditions)
-    if (error.code === 11000) {
-      console.log("Word of the day already set for today (duplicate key prevented)");
-      return;
-    }
     console.error("Error updating word of the day:", error);
     // Add error reporting here (e.g., Sentry, logging service)
   }

@@ -106,12 +106,6 @@ router.post('/createphrase', async (req, res) => {
 router.get('/phrase/:id', async (req, res) => {
   try {
     const phrasalVerb = await PhrasalVerb.findById(req?.params?.id);
-    if (!phrasalVerb) {
-      return res.status(404).json({
-        success: false,
-        error: 'Phrasal verb not found'
-      });
-    }
     res.json(phrasalVerb);
   } catch (error) {
     console.error('Error fetching phrasal verb:', error);
@@ -123,66 +117,10 @@ router.get('/phrase/:id', async (req, res) => {
   }
 });
 
-router.put('/phrase/:id', async (req, res) => {
-  try {
-    const { phrase, meaning, difficulty, example_sentences, synonyms, antonyms, relatedWords } = req.body;
-    
-    // Validate required fields
-    if (!phrase || !meaning) {
-      return res.status(400).json({
-        success: false,
-        error: 'Phrase and meaning are required fields'
-      });
-    }
-
-    const updatedPhrasalVerb = await PhrasalVerb.findByIdAndUpdate(
-      req?.params?.id,
-      {
-        phrase,
-        meaning,
-        ...(difficulty && { difficulty }),
-        ...(example_sentences && { example_sentences }),
-        ...(synonyms !== undefined && { synonyms }),
-        ...(antonyms !== undefined && { antonyms }),
-        ...(relatedWords !== undefined && { relatedWords })
-      },
-      { new: true, runValidators: true }
-    );
-
-    if (!updatedPhrasalVerb) {
-      return res.status(404).json({
-        success: false,
-        error: 'Phrasal verb not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      data: updatedPhrasalVerb
-    });
-  } catch (error) {
-    console.error('Error updating phrasal verb:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Internal Server Error',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
 router.delete('/phrase/:id', async (req, res) => {
   try {
     const deletedPhrasalVerb = await PhrasalVerb.findByIdAndDelete(req?.params?.id);
-    if (!deletedPhrasalVerb) {
-      return res.status(404).json({
-        success: false,
-        error: 'Phrasal verb not found'
-      });
-    }
-    res.json({
-      success: true,
-      data: deletedPhrasalVerb
-    });
+    res.json(deletedPhrasalVerb);
   } catch (error) {
     console.error('Error deleting phrasal verb:', error);
     res.status(500).json({

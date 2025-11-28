@@ -30,16 +30,6 @@ const userSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: 'Question'
   }],
-  savedWords: [{
-    type: Schema.Types.ObjectId,
-    ref: 'Word'
-  }],
-  progress: {
-    wordsLearned: { type: Number, default: 0 },
-    categoriesCompleted: { type: Number, default: 0 },
-    streak: { type: Number, default: 0 },
-    lastActivity: { type: Date }
-  },
   createdAt: {
     type: Date,
     default: Date.now
