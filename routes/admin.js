@@ -17,11 +17,11 @@ router.get('/dashboard/stats', async (req, res) => {
       totalExpressions,
       totalPhrasalVerbs
     ] = await Promise.all([
-      User.countDocuments(),
-      Word.countDocuments(),
-      Question.countDocuments(),
-      Expression.countDocuments(),
-      PhrasalVerb.countDocuments()
+      User?.countDocuments(),
+      Word?.countDocuments(),
+      Question?.countDocuments(),
+      Expression?.countDocuments(),
+      PhrasalVerb?.countDocuments()
     ]);
 
     const stats = {
