@@ -1,35 +1,44 @@
-import express from 'express';
-import cors from 'cors';
-import 'dotenv/config';
-import './db.js';
-import userrouter from './routes/user.js';
-import wordsrouter from './routes/words.js';
-import wordOfTheDayRouter from './routes/wordOfTheDay.js';
-import adminrouter from './routes/admin.js';
-import questionsrouter from './routes/questions.js'
-import phraserouter from './routes/phrase.js';
+import { connectDatabase } from './src/config/database.js';
+import app from './src/app.js';
+import { config } from './src/config/env.js';
+import logger from './src/utils/logger.js';
 
-import './models/expressionmodel.js';
-import './models/phrasalVerbsmodel.js';
-import './models/questionsmodel.js';
-import './models/wordmodel.js';
+const startServer = async () => {
+  try {
+    // Connect to database
+    await connectDatabase();
 
+    // Start server
+    const server = app.listen(config.port, () => {
+      logger.info(`🚀 Server is running on port ${config.port}`);
+      logger.info(`📁 Environment: ${config.env}`);
+      logger.info(`🌍 Access: http://localhost:${config.port}`);
+    });
 
-const app = express();
-const port = process.env.PORT || 8000;
+    // Handle server errors
+    server.on('error', (error) => {
+      if (error.syscall !== 'listen') {
+        throw error;
+      }
 
-// Middleware
-app.use(cors({ origin: '*' }));
-app.use(express.json());
+      switch (error.code) {
+        case 'EACCES':
+          logger.error(`Port ${config.port} requires elevated privileges`);
+          process.exit(1);
+          break;
+        case 'EADDRINUSE':
+          logger.error(`Port ${config.port} is already in use`);
+          process.exit(1);
+          break;
+        default:
+          throw error;
+      }
+    });
+  } catch (error) {
+    logger.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
 
-
-app.use("/api/v1/user", userrouter);
-app.use("/api/v1/words", wordsrouter)
-app.use("/api/v1/questions", questionsrouter)
-app.use("/api/v1/word-of-the-day", wordOfTheDayRouter);
-app.use("/api/v1/phrase", phraserouter);
-app.use("/api/v1/admin", adminrouter);
-// Start server
-app.listen(port, () => {
-  console.log(`🚀 Server is running on port ${port}`);
-});
+// Start the server
+startServer();

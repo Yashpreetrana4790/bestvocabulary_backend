@@ -1,4 +1,9 @@
-export const prompt = (word) => `
+/**
+ * Generate AI prompt for word generation
+ * @param {string} word - Word to generate prompt for
+ * @returns {string} Formatted prompt string
+ */
+export const generatePrompt = (word) => `
     Provide structured JSON for the following word:
 
     Word: ${word}
@@ -62,3 +67,6 @@ export const prompt = (word) => `
 
     Ensure the response is in valid JSON format.
 `;
+
+export default generatePrompt;
+

@@ -40,6 +40,9 @@ const wordSchema = new mongoose.Schema({
       type: [String]
     }
   },
+  note : {
+    type : String
+  },
 
   meanings: [
     {
