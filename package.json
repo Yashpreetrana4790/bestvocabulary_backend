@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
+    "prod": "cross-env NODE_ENV=production node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -17,8 +18,10 @@
     "bcrypt": "^5.1.1",
     "bcryptjs": "^2.4.3",
     "body-parser": "^1.20.2",
+    "cloudinary": "^2.8.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
+    "emoji-picker-react": "^4.15.2",
     "express": "^4.19.2",
     "express-mongo-sanitize": "^2.2.0",
     "express-rate-limit": "^8.2.1",
@@ -27,12 +30,17 @@
     "moment": "^2.30.1",
     "mongodb": "^6.8.0",
     "mongoose": "^8.5.1",
+    "multer": "^2.0.2",
     "node-cron": "^3.0.3",
+    "react-colorful": "^5.6.1",
+    "react-dropzone": "^14.3.8",
     "serverless-http": "^3.2.0",
+    "uuid": "^13.0.0",
     "winston": "^3.18.3",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "nodemon": "^3.1.7"
   }
 }
