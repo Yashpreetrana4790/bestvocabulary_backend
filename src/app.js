@@ -16,6 +16,7 @@ import statsRouter from './routes/stats.js';
 import questionsRouter from './routes/questions.js';
 import phraseRouter from './routes/phrase.js';
 import aiRouter from './routes/ai.js';
+import etymologyRouter from './routes/etymology.js';
 
 // Import models to ensure they're registered
 import './models/expressionmodel.js';
@@ -65,6 +66,7 @@ app.use('/api/v1/phrase', phraseRouter);
 app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/stats', statsRouter);
 app.use('/api/v1/ai', aiRouter);
+app.use('/api/v1/etymology', etymologyRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

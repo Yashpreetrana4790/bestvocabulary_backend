@@ -2,6 +2,7 @@ import Word from '../models/wordmodel.js';
 import mongoose from 'mongoose';
 import { NotFoundError, ValidationError } from '../utils/ApiError.js';
 import logger from '../utils/logger.js';
+import { getEmbedding } from './embeddingService.js';
 
 /**
  * Get all words with filtering and pagination
@@ -9,12 +10,28 @@ import logger from '../utils/logger.js';
  * @returns {Promise<Object>} Words and pagination info
  */
 export const getAllWords = async (filters) => {
-  const { page = 1, limit = 12, search, difficulty, length, startsWith } = filters;
+  const { 
+    page = 1, 
+    limit = 12, 
+    search, 
+    difficulty, 
+    length, 
+    startsWith,
+    category,
+    pos,
+    tone,
+    hasEtymology,
+    sortBy = 'word',
+    sortOrder = 'asc'
+  } = filters;
 
   const difficultyMapping = {
     Beginner: ['Easy', 'Beginner'],
     Intermediate: ['Medium', 'Intermediate'],
     Advanced: ['Hard', 'Advanced'],
+    Easy: ['Easy', 'Beginner'],
+    Medium: ['Medium', 'Intermediate'],
+    Hard: ['Hard', 'Advanced'],
   };
 
   let query = {};
@@ -45,13 +62,35 @@ export const getAllWords = async (filters) => {
     }
   }
 
+  if (category) {
+    query['meanings.category'] = { $regex: category, $options: 'i' };
+  }
+
+  if (pos) {
+    query['meanings.pos'] = { $regex: pos, $options: 'i' };
+  }
+
+  if (tone) {
+    query['overall_tone'] = { $regex: tone, $options: 'i' };
+  }
+
+  if (hasEtymology === 'true') {
+    query['etymology'] = { $exists: true, $ne: '' };
+  }
+
   const pageNum = parseInt(page) || 1;
   const limitNum = parseInt(limit) || 12;
   const skip = (pageNum - 1) * limitNum;
 
+  // Build sort object
+  const sortOptions = {};
+  const validSortFields = ['word', 'frequency', 'createdAt'];
+  const sortField = validSortFields.includes(sortBy) ? sortBy : 'word';
+  sortOptions[sortField] = sortOrder === 'desc' ? -1 : 1;
+
   // Get total count and paginated results
   const [words, totalCount] = await Promise.all([
-    Word.find(query).skip(skip).limit(limitNum).lean(),
+    Word.find(query).sort(sortOptions).skip(skip).limit(limitNum).lean(),
     Word.countDocuments(query),
   ]);
 
@@ -76,7 +115,10 @@ export const getAllWords = async (filters) => {
  * @returns {Promise<Object>} Word
  */
 export const getWordByText = async (wordText) => {
-  const word = await Word.findOne({ word: wordText.toLowerCase() }).populate({
+  // Use case-insensitive regex to match word regardless of how it's stored in DB
+  const word = await Word.findOne({ 
+    word: { $regex: new RegExp(`^${wordText}$`, 'i') }
+  }).populate({
     path: 'synonyms antonyms expressions PhrasalVerbs questions',
     strictPopulate: false,
   });
@@ -385,6 +427,154 @@ export const removeAntonymFromMeaning = async (wordId, meaningId, antonymWordId)
   return updatedWord;
 };
 
+/**
+ * Cosine similarity between two vectors (same length).
+ * @param {number[]} a
+ * @param {number[]} b
+ * @returns {number} Value in [-1, 1]
+ */
+const cosineSimilarity = (a, b) => {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length || a.length === 0) {
+    return 0;
+  }
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  return denom === 0 ? 0 : dot / denom;
+};
+
+/**
+ * Build a single searchable text for a word (used for embedding and semantic search).
+ * @param {Object} wordDoc - Word document (plain or mongoose doc)
+ * @returns {string}
+ */
+export const buildSearchableText = (wordDoc) => {
+  if (!wordDoc) return '';
+  const parts = [wordDoc.word || ''];
+  if (Array.isArray(wordDoc.meanings)) {
+    for (const m of wordDoc.meanings) {
+      if (m.subtitle) parts.push(m.subtitle);
+      if (m.meaning) parts.push(m.meaning);
+      if (m.easyMeaning) parts.push(m.easyMeaning);
+    }
+  }
+  if (wordDoc.etymology) parts.push(wordDoc.etymology);
+  return parts.filter(Boolean).join(' ').trim() || wordDoc.word || '';
+};
+
+/**
+ * Semantic search: embed query and return words ranked by embedding similarity.
+ * Only words that already have an embedding are included; run backfill to add embeddings.
+ * @param {string} query - Natural language or keyword query
+ * @param {number} limit - Max results (default 10)
+ * @returns {Promise<Array<{ word: Object, score: number }>>}
+ */
+export const semanticSearch = async (query, limit = 10) => {
+  if (!query || typeof query !== 'string' || !query.trim()) {
+    return [];
+  }
+
+  const queryEmbedding = await getEmbedding(query.trim());
+  if (!queryEmbedding || queryEmbedding.length === 0) {
+    logger.warn('Semantic search: could not get query embedding');
+    return [];
+  }
+
+  const words = await Word.find({ 'embedding.0': { $exists: true } })
+    .select('+embedding')
+    .limit(500) // cap for in-memory similarity
+    .lean();
+
+  if (words.length === 0) {
+    logger.info('Semantic search: no words with embeddings found; run backfill first');
+    return [];
+  }
+
+  const scored = words
+    .filter((w) => Array.isArray(w.embedding) && w.embedding.length === queryEmbedding.length)
+    .map((w) => ({
+      word: { ...w, embedding: undefined },
+      score: cosineSimilarity(queryEmbedding, w.embedding),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+
+  return scored;
+};
+
+/**
+ * Generate and save embedding for a word (for backfill). Idempotent.
+ * @param {string} wordId - Word ID
+ * @returns {Promise<Object|null>} Updated word or null
+ */
+export const ensureWordEmbedding = async (wordId) => {
+  if (!mongoose.Types.ObjectId.isValid(wordId)) {
+    throw new ValidationError('Invalid word ID');
+  }
+
+  const word = await Word.findById(wordId).lean();
+  if (!word) {
+    throw new NotFoundError('Word not found');
+  }
+
+  const text = buildSearchableText(word);
+  if (!text) {
+    logger.warn(`No searchable text for word ${word.word}`);
+    return null;
+  }
+
+  const embedding = await getEmbedding(text);
+  if (!embedding) {
+    logger.warn(`Could not generate embedding for word ${word.word}`);
+    return null;
+  }
+
+  const updated = await Word.findByIdAndUpdate(
+    wordId,
+    { $set: { embedding } },
+    { new: true }
+  );
+  logger.info(`Embedding saved for word: ${updated.word}`);
+  return updated;
+};
+
+/**
+ * Backfill embeddings for words that don't have one. Processes up to `limit` words.
+ * @param {number} limit - Max words to process (default 20)
+ * @returns {Promise<{ processed: number, succeeded: number, failed: number }>}
+ */
+export const backfillEmbeddings = async (limit = 20) => {
+  const words = await Word.find(
+    { $or: [{ embedding: { $exists: false } }, { embedding: null }, { 'embedding.0': { $exists: false } }] }
+  )
+    .select('_id')
+    .limit(limit)
+    .lean();
+
+  let succeeded = 0;
+  let failed = 0;
+
+  const delayMs = 300;
+  for (const w of words) {
+    try {
+      const updated = await ensureWordEmbedding(w._id.toString());
+      if (updated) succeeded++;
+      else failed++;
+    } catch {
+      failed++;
+    }
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+
+  return { processed: words.length, succeeded, failed };
+};
+
 export default {
   getAllWords,
   getWordByText,
@@ -396,5 +586,9 @@ export default {
   addAntonymToMeaning,
   removeSynonymFromMeaning,
   removeAntonymFromMeaning,
+  buildSearchableText,
+  semanticSearch,
+  ensureWordEmbedding,
+  backfillEmbeddings,
 };
 

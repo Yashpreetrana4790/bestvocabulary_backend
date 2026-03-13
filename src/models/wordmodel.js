@@ -1,5 +1,57 @@
 import mongoose from "mongoose";
 
+const originSchema = new mongoose.Schema({
+  language: {
+    type: String,
+    required: true
+  },
+  languageCode: String,
+  originalWord: String,
+  meaning: String,
+  period: String,
+  region: {
+    name: String,
+    coordinates: {
+      lat: Number,
+      lng: Number
+    }
+  }
+}, { _id: false });
+
+const etymologyDetailSchema = new mongoose.Schema({
+  description: String,
+  origins: [originSchema],
+  rootWords: [{
+    root: String,
+    meaning: String,
+    language: String
+  }],
+  evolution: [{
+    period: String,
+    form: String,
+    meaning: String,
+    language: String
+  }],
+  cognates: [{
+    word: String,
+    language: String,
+    meaning: String
+  }]
+}, { _id: false });
+
+const wordRelationSchema = new mongoose.Schema({
+  wordId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Word'
+  },
+  word: String,
+  relationStrength: {
+    type: Number,
+    min: 0,
+    max: 1,
+    default: 0.5
+  }
+}, { _id: false });
 
 const wordSchema = new mongoose.Schema({
   word: {
@@ -20,6 +72,7 @@ const wordSchema = new mongoose.Schema({
   etymology: {
     type: String
   },
+  etymologyDetails: etymologyDetailSchema,
   misspellings: [String],
   usage_distribution: {
     spoken: {
@@ -40,6 +93,7 @@ const wordSchema = new mongoose.Schema({
       type: [String]
     }
   },
+  relatedWords: [wordRelationSchema],
   note : {
     type : String
   },
@@ -114,6 +168,11 @@ const wordSchema = new mongoose.Schema({
   }],
   root_analysis: {
     type: mongoose.Schema.Types.Mixed
+  },
+  // AI embedding for semantic search (Gemini). Optional; backfill via admin/script.
+  embedding: {
+    type: [Number],
+    select: false, // exclude from default queries; use .select('+embedding') for semantic search
   }
 })
 
