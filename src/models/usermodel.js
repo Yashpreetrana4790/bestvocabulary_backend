@@ -44,6 +44,10 @@ const userSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: 'Question'
   }],
+  savedWords: [{
+    type: Schema.Types.ObjectId,
+    ref: 'Word'
+  }],
   createdAt: {
     type: Date,
     default: Date.now

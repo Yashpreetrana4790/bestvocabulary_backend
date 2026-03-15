@@ -16,6 +16,9 @@ import {
   changeUserPassword,
   getUserById,
   getAllUsers,
+  getSavedWords,
+  addSavedWord,
+  removeSavedWord,
 } from '../services/userService.js';
 import { authLimiter } from '../middlewares/rateLimiter.js';
 import { authenticate } from '../middlewares/auth.js';
@@ -227,6 +230,55 @@ router.get(
   asyncHandler(async (req, res) => {
     const users = await getAllUsers();
     return successResponse(res, users, 'Users retrieved successfully');
+  })
+);
+
+/**
+ * @route   GET /api/v1/user/saved-words
+ * @desc    Get current user's saved words (requires auth)
+ * @access  Private
+ */
+router.get(
+  '/saved-words',
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const list = await getSavedWords(req.user.userId);
+    return successResponse(res, list, 'Saved words retrieved successfully');
+  })
+);
+
+/**
+ * @route   POST /api/v1/user/saved-words
+ * @desc    Add a word to current user's saved words (requires auth). Body: { wordId }
+ * @access  Private
+ */
+router.post(
+  '/saved-words',
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const wordId = req.body?.wordId;
+    if (!wordId) {
+      return res.status(400).json({
+        success: false,
+        message: 'wordId is required',
+      });
+    }
+    const result = await addSavedWord(req.user.userId, wordId);
+    return successResponse(res, result, result.added ? 'Word saved' : 'Already saved', result.added ? 201 : 200);
+  })
+);
+
+/**
+ * @route   DELETE /api/v1/user/saved-words/:wordId
+ * @desc    Remove a word from current user's saved words (requires auth)
+ * @access  Private
+ */
+router.delete(
+  '/saved-words/:wordId',
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const result = await removeSavedWord(req.user.userId, req.params.wordId);
+    return successResponse(res, result, result.removed ? 'Word removed from saved' : 'Word was not in saved list');
   })
 );
 

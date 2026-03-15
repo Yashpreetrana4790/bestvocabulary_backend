@@ -3,6 +3,7 @@ import { OAuth2Client } from 'google-auth-library';
 import { generateToken } from '../config/jwt.js';
 import { config } from '../config/env.js';
 import User from '../models/usermodel.js';
+import Word from '../models/wordmodel.js';
 import {
   BadRequestError,
   NotFoundError,
@@ -328,6 +329,74 @@ export const getAllUsers = async () => {
   return users;
 };
 
+/**
+ * Get user's saved words (populated with word details)
+ * @param {string} userId - User ID
+ * @returns {Promise<Array>} Saved words with word, pronunciation, meaning, savedAt
+ */
+export const getSavedWords = async (userId) => {
+  const user = await User.findById(userId).populate({
+    path: 'savedWords',
+    select: 'word pronunciation meanings',
+  }).lean();
+  if (!user || !user.savedWords) return [];
+  return (user.savedWords || []).map((w) => ({
+    wordId: w._id,
+    word: w.word,
+    pronunciation: w.pronunciation || '',
+    meaning: w.meanings?.[0]?.meaning || w.meanings?.[0]?.subtitle || '',
+  }));
+};
+
+/**
+ * Add a word to user's saved words
+ * @param {string} userId - User ID
+ * @param {string} wordId - Word ID (MongoDB ObjectId)
+ * @returns {Promise<Object>} Updated user savedWords count or added word
+ */
+const MAX_SAVED_WORDS = 500;
+
+export const addSavedWord = async (userId, wordId) => {
+  const word = await Word.findById(wordId);
+  if (!word) throw new NotFoundError('Word not found');
+  const user = await User.findById(userId);
+  if (!user) throw new NotFoundError('User not found');
+  const idStr = wordId.toString();
+  if (user.savedWords.some((id) => id.toString() === idStr)) {
+    return { added: false, word: word.word };
+  }
+  if (user.savedWords.length >= MAX_SAVED_WORDS) {
+    throw new BadRequestError(`You can save up to ${MAX_SAVED_WORDS} words. Remove some to add more.`);
+  }
+  user.savedWords.push(wordId);
+  await user.save();
+  logger.info(`User ${userId} saved word: ${word.word}`);
+  return {
+    added: true,
+    word: word.word,
+    wordId: word._id,
+  };
+};
+
+/**
+ * Remove a word from user's saved words
+ * @param {string} userId - User ID
+ * @param {string} wordId - Word ID (MongoDB ObjectId)
+ * @returns {Promise<Object>} { removed: boolean }
+ */
+export const removeSavedWord = async (userId, wordId) => {
+  const user = await User.findById(userId);
+  if (!user) throw new NotFoundError('User not found');
+  const before = user.savedWords.length;
+  user.savedWords.pull(wordId);
+  if (user.savedWords.length === before) {
+    return { removed: false };
+  }
+  await user.save();
+  logger.info(`User ${userId} removed saved word: ${wordId}`);
+  return { removed: true };
+};
+
 export default {
   registerUser,
   loginUser,
@@ -337,5 +406,8 @@ export default {
   changeUserPassword,
   getUserById,
   getAllUsers,
+  getSavedWords,
+  addSavedWord,
+  removeSavedWord,
 };
 
