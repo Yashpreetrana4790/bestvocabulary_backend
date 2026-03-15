@@ -31,8 +31,11 @@ export const errorHandler = (err, req, res, next) => {
 
   // Handle Mongoose duplicate key errors
   if (err.code === 11000) {
-    const field = Object.keys(err.keyValue)[0];
-    error = new BadRequestError(`${field} already exists`);
+    const field = Object.keys(err.keyValue)[0] || '';
+    const isUserField = /email|username|googleId/i.test(field);
+    error = new BadRequestError(
+      isUserField ? 'User already exists' : `${field} already exists`
+    );
   }
 
   // Handle JWT errors

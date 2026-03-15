@@ -21,7 +21,12 @@ export const generateToken = (payload) => {
  */
 export const verifyToken = (token) => {
   try {
-    return jwt.verify(token, config.jwt.secret);
+    if (token == null || typeof token !== 'string') {
+      return null;
+    }
+    const trimmed = String(token).trim();
+    if (!trimmed) return null;
+    return jwt.verify(trimmed, config.jwt.secret);
   } catch (error) {
     return null;
   }

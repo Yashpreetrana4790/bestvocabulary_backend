@@ -10,10 +10,24 @@ const userSchema = new Schema({
     lowercase: true,
     unique: true
   },
+  username: {
+    type: String,
+    required: false,
+    sparse: true,
+    unique: true,
+    default: null
+  },
   password: {
     type: String,
-    required: true,
-    minlength: 6
+    required: false,
+    minlength: 6,
+    default: null
+  },
+  googleId: {
+    type: String,
+    required: false,
+    sparse: true,
+    unique: true
   },
   fullName: {
     type: String,

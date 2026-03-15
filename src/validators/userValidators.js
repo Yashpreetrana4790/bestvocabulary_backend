@@ -12,6 +12,10 @@ export const loginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 });
 
+export const loginGoogleSchema = z.object({
+  credential: z.string().min(1, 'Google credential is required'),
+});
+
 export const changePasswordSchema = z.object({
   oldPassword: z.string().min(1, 'Old password is required'),
   newPassword: z.string().min(6, 'New password must be at least 6 characters'),
@@ -25,6 +29,10 @@ export const validateLogin = (data) => {
   return loginSchema.safeParse(data);
 };
 
+export const validateLoginGoogle = (data) => {
+  return loginGoogleSchema.safeParse(data);
+};
+
 export const validateChangePassword = (data) => {
   return changePasswordSchema.safeParse(data);
 };
@@ -32,9 +40,11 @@ export const validateChangePassword = (data) => {
 export default {
   registerSchema,
   loginSchema,
+  loginGoogleSchema,
   changePasswordSchema,
   validateRegister,
   validateLogin,
+  validateLoginGoogle,
   validateChangePassword,
 };
 

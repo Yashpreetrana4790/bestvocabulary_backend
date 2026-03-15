@@ -17,6 +17,11 @@ import questionsRouter from './routes/questions.js';
 import phraseRouter from './routes/phrase.js';
 import aiRouter from './routes/ai.js';
 import etymologyRouter from './routes/etymology.js';
+import idiomsRouter from './routes/idioms.js';
+import categoryRouter from './routes/category.js';
+
+// Import services
+import { initializeWodService } from './services/wodService.js';
 
 // Import models to ensure they're registered
 import './models/expressionmodel.js';
@@ -25,6 +30,7 @@ import './models/questionsmodel.js';
 import './models/usermodel.js';
 import './models/wodmodel.js';
 import './models/wordmodel.js';
+import './models/categorymodel.js';
 
 const app = express();
 
@@ -67,6 +73,8 @@ app.use('/api/v1/admin', adminRouter);
 app.use('/api/v1/stats', statsRouter);
 app.use('/api/v1/ai', aiRouter);
 app.use('/api/v1/etymology', etymologyRouter);
+app.use('/api/v1/idioms', idiomsRouter);
+app.use('/api/v1/category', categoryRouter);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -87,6 +95,9 @@ app.use((req, res) => {
 
 // Global error handler (must be last middleware)
 app.use(errorHandler);
+
+// Initialize Word of the Day service (cron job + startup check)
+initializeWodService();
 
 export default app;
 

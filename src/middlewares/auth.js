@@ -7,13 +7,15 @@ import { UnauthorizedError, ForbiddenError } from '../utils/ApiError.js';
  */
 export const authenticate = (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
+    const raw = req.headers.authorization;
+    const authHeader = raw != null && typeof raw === 'string' ? raw : '';
 
     if (!authHeader || !authHeader.toLowerCase().startsWith('bearer ')) {
       throw new UnauthorizedError('No token provided');
     }
 
-    const token = authHeader.split(' ')[1];
+    const parts = authHeader.trim().split(/\s+/);
+    const token = parts.length >= 2 ? String(parts[1]).trim() : '';
 
     if (!token) {
       throw new UnauthorizedError('No token provided');

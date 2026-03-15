@@ -47,11 +47,21 @@ export const config = {
   // Google AI
   geminiAiKey: process.env.GEMINI_AI_KEY,
 
+  // Google OAuth (server-side code flow)
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  },
+  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+
   // CORS
   cors: {
-    origin: process.env.ALLOWED_ORIGINS 
-      ? process.env.ALLOWED_ORIGINS.split(',')
-      : '*',
+    origin: (() => {
+      const o = process.env.ALLOWED_ORIGINS;
+      if (o == null || typeof o !== 'string') return '*';
+      const list = String(o).split(',').map((s) => s.trim()).filter(Boolean);
+      return list.length ? list : '*';
+    })(),
   },
 
   // Rate Limiting

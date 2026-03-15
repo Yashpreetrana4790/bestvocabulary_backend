@@ -2,11 +2,20 @@ import { connectDatabase } from './src/config/database.js';
 import app from './src/app.js';
 import { config } from './src/config/env.js';
 import logger from './src/utils/logger.js';
+import User from './src/models/usermodel.js';
 
 const startServer = async () => {
   try {
     // Connect to database
     await connectDatabase();
+
+    // Drop old username_1 index if present (was unique on null; we now use username=email for new users)
+    try {
+      await User.collection.dropIndex('username_1');
+      logger.info('Dropped legacy users.username_1 index');
+    } catch (_) {
+      // Index may not exist
+    }
 
     // Start server
     const server = app.listen(config.port, () => {
