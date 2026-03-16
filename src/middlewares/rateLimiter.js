@@ -38,8 +38,30 @@ export const authLimiter = rateLimit({
   skipSuccessfulRequests: true,
 });
 
+/**
+ * Stricter limiter for list endpoints (dictionary, search) to slow down bulk scraping
+ */
+export const listLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60, // 60 requests per minute per IP for list endpoints
+  message: {
+    success: false,
+    message: 'Too many requests. Please slow down.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    logger.warn(`List rate limit exceeded for IP: ${req.ip}`);
+    res.status(429).json({
+      success: false,
+      message: 'Too many requests. Please slow down.',
+    });
+  },
+});
+
 export default {
   apiLimiter,
   authLimiter,
+  listLimiter,
 };
 

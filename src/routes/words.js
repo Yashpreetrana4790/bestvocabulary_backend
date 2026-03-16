@@ -1,6 +1,7 @@
 import express from 'express';
 import asyncHandler from '../utils/asyncHandler.js';
 import { successResponse, paginatedResponse } from '../utils/apiResponse.js';
+import { listLimiter } from '../middlewares/rateLimiter.js';
 import {
   getAllWords,
   getWordByText,
@@ -21,10 +22,11 @@ const router = express.Router();
 /**
  * @route   GET /api/v1/words/words
  * @desc    Get all words with filtering and pagination
- * @access  Public
+ * @access  Public (rate-limited to reduce scraping)
  */
 router.get(
   '/words',
+  listLimiter,
   asyncHandler(async (req, res) => {
     const result = await getAllWords(req.query);
     return successResponse(res, result, 'Words retrieved successfully');

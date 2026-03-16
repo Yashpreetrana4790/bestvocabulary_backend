@@ -21,6 +21,8 @@ export const getAllWords = async (filters) => {
     pos,
     tone,
     hasEtymology,
+    hasPhrases,
+    frequency,
     sortBy = 'word',
     sortOrder = 'asc'
   } = filters;
@@ -78,8 +80,27 @@ export const getAllWords = async (filters) => {
     query['etymology'] = { $exists: true, $ne: '' };
   }
 
-  const pageNum = parseInt(page) || 1;
-  const limitNum = parseInt(limit) || 12;
+  if (frequency) {
+    const freqValue = String(frequency).toLowerCase();
+    if (['high', 'medium', 'low'].includes(freqValue)) {
+      query['frequency'] = { $regex: new RegExp(`^${freqValue}$`, 'i') };
+    }
+  }
+
+  // Words that have at least one phrase (PhrasalVerb) or expression (idiom etc.)
+  if (hasPhrases === 'true') {
+    query.$and = query.$and || [];
+    query.$and.push({
+      $or: [
+        { PhrasalVerbs: { $exists: true, $ne: [] } },
+        { expressions: { $exists: true, $ne: [] } },
+      ],
+    });
+  }
+
+  const pageNum = Math.max(1, parseInt(page) || 1);
+  const requestedLimit = parseInt(limit) || 12;
+  const limitNum = Math.min(Math.max(1, requestedLimit), 50); // Cap at 50 to reduce bulk scraping
   const skip = (pageNum - 1) * limitNum;
 
   // Build sort object
@@ -116,12 +137,14 @@ export const getAllWords = async (filters) => {
  */
 export const getWordByText = async (wordText) => {
   // Use case-insensitive regex to match word regardless of how it's stored in DB
-  const word = await Word.findOne({ 
-    word: { $regex: new RegExp(`^${wordText}$`, 'i') }
-  }).populate({
-    path: 'synonyms antonyms expressions PhrasalVerbs questions',
-    strictPopulate: false,
-  });
+  const word = await Word.findOne({
+    word: { $regex: new RegExp(`^${wordText}$`, 'i') },
+  })
+    .populate({ path: 'meanings.synonyms', select: 'word pronunciation' })
+    .populate({ path: 'meanings.antonyms', select: 'word pronunciation' })
+    .populate({ path: 'expressions', select: 'expression type meanings' })
+    .populate({ path: 'PhrasalVerbs', select: 'phrase meaning example_sentences' })
+    .populate({ path: 'questions', strictPopulate: false });
 
   if (!word) {
     throw new NotFoundError('Word not found');
