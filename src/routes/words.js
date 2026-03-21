@@ -1,7 +1,8 @@
 import express from 'express';
 import asyncHandler from '../utils/asyncHandler.js';
 import { successResponse, paginatedResponse } from '../utils/apiResponse.js';
-import { listLimiter } from '../middlewares/rateLimiter.js';
+import { listLimiter, backfillLimiter } from '../middlewares/rateLimiter.js';
+import { authenticate, authorize } from '../middlewares/auth.js';
 import {
   getAllWords,
   getWordByText,
@@ -12,6 +13,7 @@ import {
   semanticSearch,
   ensureWordEmbedding,
   backfillEmbeddings,
+  getCategoryWordCounts,
   addSynonymToMeaning,
   addAntonymToMeaning,
   removeSynonymFromMeaning,
@@ -115,12 +117,39 @@ router.get(
 );
 
 /**
+ * @route   GET /api/v1/words/category-counts?names=Business,Medical,...
+ * @desc    Word counts per `meanings[].category` for FE category cards
+ * @access  Public (rate-limited)
+ */
+router.get(
+  '/category-counts',
+  listLimiter,
+  asyncHandler(async (req, res) => {
+    const namesRaw = req.query.names;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+
+    const names = typeof namesRaw === 'string'
+      ? namesRaw
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
+
+    const data = await getCategoryWordCounts(names, limit);
+    return successResponse(res, data, 'Category counts retrieved successfully');
+  })
+);
+
+/**
  * @route   POST /api/v1/words/backfill-embedding/:wordId
  * @desc    Generate and save embedding for one word (for semantic search). Admin / internal.
  * @access  Public (consider protecting in production)
  */
 router.post(
   '/backfill-embedding/:wordId',
+  authenticate,
+  authorize('admin'),
+  backfillLimiter,
   asyncHandler(async (req, res) => {
     const updated = await ensureWordEmbedding(req.params.wordId);
     return successResponse(res, updated, updated ? 'Embedding saved' : 'Embedding not generated');
@@ -134,6 +163,9 @@ router.post(
  */
 router.post(
   '/backfill-embeddings',
+  authenticate,
+  authorize('admin'),
+  backfillLimiter,
   asyncHandler(async (req, res) => {
     const limit = Math.min(parseInt(req.body?.limit, 10) || 20, 100);
     const result = await backfillEmbeddings(limit);
