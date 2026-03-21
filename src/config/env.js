@@ -47,6 +47,9 @@ export const config = {
   // Google AI
   geminiAiKey: process.env.GEMINI_AI_KEY,
 
+  // Groq AI (embeddings)
+  groqApiKey: process.env.GROQ_API_KEY,
+
   // Google OAuth (server-side code flow)
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID,

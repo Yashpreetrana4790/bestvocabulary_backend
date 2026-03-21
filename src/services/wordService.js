@@ -2,7 +2,9 @@ import Word from '../models/wordmodel.js';
 import mongoose from 'mongoose';
 import { NotFoundError, ValidationError } from '../utils/ApiError.js';
 import logger from '../utils/logger.js';
-import { getEmbedding } from './embeddingService.js';
+import { getEmbedding, getEmbeddings } from './embeddingService.js';
+
+const normalizeWord = (value) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
 
 /**
  * Get all words with filtering and pagination
@@ -73,7 +75,13 @@ export const getAllWords = async (filters) => {
   }
 
   if (tone) {
-    query['overall_tone'] = { $regex: tone, $options: 'i' };
+    query.$and = query.$and || [];
+    query.$and.push({
+      $or: [
+        { overallTone: { $regex: tone, $options: 'i' } },
+        { overall_tone: { $regex: tone, $options: 'i' } },
+      ],
+    });
   }
 
   if (hasEtymology === 'true') {
@@ -92,6 +100,7 @@ export const getAllWords = async (filters) => {
     query.$and = query.$and || [];
     query.$and.push({
       $or: [
+        { phrasalVerbs: { $exists: true, $ne: [] } },
         { PhrasalVerbs: { $exists: true, $ne: [] } },
         { expressions: { $exists: true, $ne: [] } },
       ],
@@ -136,13 +145,21 @@ export const getAllWords = async (filters) => {
  * @returns {Promise<Object>} Word
  */
 export const getWordByText = async (wordText) => {
-  // Use case-insensitive regex to match word regardless of how it's stored in DB
+  const normalized = normalizeWord(wordText);
+  if (!normalized) {
+    throw new ValidationError('Word text is required');
+  }
+
   const word = await Word.findOne({
-    word: { $regex: new RegExp(`^${wordText}$`, 'i') },
+    $or: [
+      { wordNormalized: normalized },
+      { word: { $regex: new RegExp(`^${wordText}$`, 'i') } },
+    ],
   })
     .populate({ path: 'meanings.synonyms', select: 'word pronunciation' })
     .populate({ path: 'meanings.antonyms', select: 'word pronunciation' })
     .populate({ path: 'expressions', select: 'expression type meanings' })
+    .populate({ path: 'phrasalVerbs', select: 'phrase meaning example_sentences' })
     .populate({ path: 'PhrasalVerbs', select: 'phrase meaning example_sentences' })
     .populate({ path: 'questions', strictPopulate: false });
 
@@ -186,7 +203,17 @@ export const getRandomWord = async () => {
  * @returns {Promise<Object>} Updated word
  */
 export const updateWord = async (wordId, updateData) => {
-  const { word, pronunciation, frequency, overall_tone, etymology, misspellings, note } = updateData;
+  const {
+    word,
+    pronunciation,
+    frequency,
+    overallTone,
+    overall_tone,
+    etymology,
+    misspellings,
+    note,
+  } = updateData;
+  const nextTone = overallTone ?? overall_tone;
 
   const updatedWord = await Word.findByIdAndUpdate(
     wordId,
@@ -194,12 +221,13 @@ export const updateWord = async (wordId, updateData) => {
       word,
       pronunciation,
       frequency,
-      overall_tone,
+      overallTone: nextTone,
+      overall_tone: nextTone,
       etymology,
       note,
       misspellings,
     },
-    { new: true }
+    { new: true, runValidators: true }
   );
 
   if (!updatedWord) {
@@ -235,9 +263,10 @@ export const updateWordMeanings = async (wordId, meanings) => {
       );
     }
 
-    // Validate common_usage
-    if (meaning.common_usage && Array.isArray(meaning.common_usage)) {
-      for (const [usageIndex, usage] of meaning.common_usage.entries()) {
+    // Validate common usage (legacy common_usage + canonical commonUsage)
+    const commonUsage = meaning.commonUsage ?? meaning.common_usage;
+    if (commonUsage && Array.isArray(commonUsage)) {
+      for (const [usageIndex, usage] of commonUsage.entries()) {
         if (!usage.context || !usage.example) {
           throw new ValidationError(
             `Common usage at index ${usageIndex} in meaning ${index} is missing context or example`
@@ -246,17 +275,46 @@ export const updateWordMeanings = async (wordId, meanings) => {
       }
     }
 
-    // Validate example_sentences
-    if (meaning.example_sentences && Array.isArray(meaning.example_sentences)) {
-      for (const [sentenceIndex, sentence] of meaning.example_sentences.entries()) {
-        if (typeof sentence !== 'string' || !sentence.trim()) {
-          throw new ValidationError(
-            `Example sentence at index ${sentenceIndex} in meaning ${index} must be a non-empty string`
-          );
+    // Validate example sentences (legacy string[] and canonical object[] with text)
+    const exampleSentences = meaning.exampleSentences ?? meaning.example_sentences;
+    if (exampleSentences && Array.isArray(exampleSentences)) {
+      for (const [sentenceIndex, sentence] of exampleSentences.entries()) {
+        if (typeof sentence === 'string' && sentence.trim()) {
+          continue;
         }
+        if (sentence && typeof sentence === 'object' && typeof sentence.text === 'string' && sentence.text.trim()) {
+          continue;
+        }
+        throw new ValidationError(
+          `Example sentence at index ${sentenceIndex} in meaning ${index} must be a non-empty string or object with text`
+        );
       }
     }
   }
+
+  const normalizeExampleSentences = (arr = []) =>
+    arr.map((sentence) => {
+      if (typeof sentence === 'string') return { text: sentence.trim() };
+      return { ...sentence, text: sentence.text.trim() };
+    });
+
+  const normalizedMeanings = meanings.map((meaning) => {
+    const commonUsage = meaning.commonUsage ?? meaning.common_usage ?? [];
+    const kidDefinition = meaning.kidDefinition ?? meaning.kiddefinition;
+    const exampleSentences = normalizeExampleSentences(
+      meaning.exampleSentences ?? meaning.example_sentences ?? []
+    );
+
+    return {
+      ...meaning,
+      commonUsage,
+      common_usage: commonUsage,
+      kidDefinition,
+      kiddefinition: kidDefinition,
+      exampleSentences,
+      example_sentences: exampleSentences,
+    };
+  });
 
   // Find the word
   const word = await Word.findById(wordId);
@@ -271,7 +329,7 @@ export const updateWordMeanings = async (wordId, meanings) => {
   });
 
   // Prepare updated meanings with proper ObjectIDs
-  const updatedMeanings = meanings.map((meaning) => {
+  const updatedMeanings = normalizedMeanings.map((meaning) => {
     // For existing meanings
     if (meaning._id && existingMeaningsMap.has(meaning._id)) {
       const existing = existingMeaningsMap.get(meaning._id);
@@ -485,6 +543,8 @@ export const buildSearchableText = (wordDoc) => {
       if (m.subtitle) parts.push(m.subtitle);
       if (m.meaning) parts.push(m.meaning);
       if (m.easyMeaning) parts.push(m.easyMeaning);
+      if (m.kidDefinition) parts.push(m.kidDefinition);
+      if (m.kiddefinition) parts.push(m.kiddefinition);
     }
   }
   if (wordDoc.etymology) parts.push(wordDoc.etymology);
@@ -573,29 +633,83 @@ export const ensureWordEmbedding = async (wordId) => {
  * @returns {Promise<{ processed: number, succeeded: number, failed: number }>}
  */
 export const backfillEmbeddings = async (limit = 20) => {
-  const words = await Word.find(
+  const wordsWithText = await Word.find(
     { $or: [{ embedding: { $exists: false } }, { embedding: null }, { 'embedding.0': { $exists: false } }] }
   )
-    .select('_id')
+    .select('_id word meanings etymology')
     .limit(limit)
     .lean();
 
+  if (!wordsWithText.length) return { processed: 0, succeeded: 0, failed: 0 };
+
+  const texts = wordsWithText.map((w) => buildSearchableText(w));
+
+  // Quota-efficiency:
+  // - When using free-tier Gemini keys, embed requests are limited (429 quota).
+  // - Since the API already caps `limit` to 100 per endpoint call, we do a single batch embedding call here.
+  const vectors = await getEmbeddings(texts, 100);
+
+  const ops = [];
   let succeeded = 0;
   let failed = 0;
 
-  const delayMs = 300;
-  for (const w of words) {
-    try {
-      const updated = await ensureWordEmbedding(w._id.toString());
-      if (updated) succeeded++;
-      else failed++;
-    } catch {
-      failed++;
+  for (let i = 0; i < wordsWithText.length; i++) {
+    const vec = vectors[i];
+    if (Array.isArray(vec) && vec.length > 0) {
+      succeeded += 1;
+      ops.push({
+        updateOne: {
+          filter: { _id: wordsWithText[i]._id },
+          update: { $set: { embedding: vec } },
+        },
+      });
+    } else {
+      failed += 1;
     }
-    await new Promise((r) => setTimeout(r, delayMs));
   }
 
-  return { processed: words.length, succeeded, failed };
+  if (ops.length > 0) {
+    await Word.bulkWrite(ops, { ordered: false });
+  }
+
+  return { processed: wordsWithText.length, succeeded, failed };
+};
+
+/**
+ * Category summary for FE:
+ * Count how many distinct Word documents have at least one meaning with each category.
+ *
+ * @param {string[]} names - category names to include (exact match; expected to match stored casing)
+ * @param {number} limit - optional limit for returned categories
+ * @returns {Promise<Array<{ category: string, count: number }>>}
+ */
+export const getCategoryWordCounts = async (names = [], limit = 50) => {
+  const parsedNames = Array.isArray(names)
+    ? names.map((n) => (typeof n === 'string' ? n.trim() : '')).filter(Boolean)
+    : [];
+
+  const matchCategory = parsedNames.length
+    ? { $in: parsedNames }
+    : { $exists: true, $ne: null, $nin: ['', ' '] };
+
+  const pipeline = [
+    { $unwind: '$meanings' },
+    { $match: { 'meanings.category': matchCategory } },
+    // Deduplicate so one word with multiple meanings in the same category counts once.
+    { $group: { _id: { wordId: '$_id', cat: '$meanings.category' } } },
+    { $group: { _id: '$_id.cat', count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+  ];
+
+  if (Number.isFinite(limit) && limit > 0) {
+    pipeline.push({ $limit: Math.min(limit, 200) });
+  }
+
+  const results = await Word.aggregate(pipeline);
+  return results.map((r) => ({
+    category: r._id,
+    count: r.count,
+  }));
 };
 
 export default {
@@ -613,5 +727,6 @@ export default {
   semanticSearch,
   ensureWordEmbedding,
   backfillEmbeddings,
+  getCategoryWordCounts,
 };
 

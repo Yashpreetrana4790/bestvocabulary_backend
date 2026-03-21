@@ -59,9 +59,31 @@ export const listLimiter = rateLimit({
   },
 });
 
+/**
+ * Limiter for expensive embedding backfill endpoints.
+ */
+export const backfillLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 5, // expensive endpoint; keep very limited
+  message: {
+    success: false,
+    message: 'Too many backfill requests. Please try again later.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    logger.warn(`Backfill rate limit exceeded for IP: ${req.ip}`);
+    res.status(429).json({
+      success: false,
+      message: 'Too many backfill requests. Please try again later.',
+    });
+  },
+});
+
 export default {
   apiLimiter,
   authLimiter,
   listLimiter,
+  backfillLimiter,
 };
 
