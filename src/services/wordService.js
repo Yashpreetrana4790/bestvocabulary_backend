@@ -160,7 +160,6 @@ export const getWordByText = async (wordText) => {
     .populate({ path: 'meanings.antonyms', select: 'word pronunciation' })
     .populate({ path: 'expressions', select: 'expression type meanings' })
     .populate({ path: 'phrasalVerbs', select: 'phrase meaning example_sentences' })
-    .populate({ path: 'PhrasalVerbs', select: 'phrase meaning example_sentences' })
     .populate({ path: 'questions', strictPopulate: false });
 
   if (!word) {
@@ -366,12 +365,55 @@ export const searchWordsForRelations = async (searchTerm, limit = 20) => {
     return [];
   }
 
-  const words = await Word.find({
-    word: { $regex: searchTerm, $options: 'i' },
-  })
-    .select('_id word pronunciation')
-    .limit(limit)
-    .lean();
+  const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 50);
+  const cleaned = searchTerm.trim();
+  const escaped = cleaned.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  const words = await Word.aggregate([
+    {
+      $match: {
+        word: { $regex: escaped, $options: 'i' },
+      },
+    },
+    {
+      $addFields: {
+        matchRank: {
+          $switch: {
+            branches: [
+              // Exact dictionary hit first
+              {
+                case: {
+                  $regexMatch: {
+                    input: '$word',
+                    regex: `^${escaped}$`,
+                    options: 'i',
+                  },
+                },
+                then: 0,
+              },
+              // Prefix hits second
+              {
+                case: {
+                  $regexMatch: {
+                    input: '$word',
+                    regex: `^${escaped}`,
+                    options: 'i',
+                  },
+                },
+                then: 1,
+              },
+            ],
+            // Any contains match goes last
+            default: 2,
+          },
+        },
+        wordLength: { $strLenCP: '$word' },
+      },
+    },
+    { $sort: { matchRank: 1, wordLength: 1, word: 1 } },
+    { $project: { _id: 1, word: 1, pronunciation: 1 } },
+    { $limit: safeLimit },
+  ]);
 
   return words;
 };

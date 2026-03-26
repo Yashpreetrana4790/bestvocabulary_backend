@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { config } from '../config/env.js';
 import logger from '../utils/logger.js';
-import { generatePrompt } from '../utils/prompt.js';
+import { generatePrompt, WORD_JSON_SCHEMA_INSTRUCTIONS } from '../utils/prompt.js';
 
 const genAI = new GoogleGenerativeAI(config.geminiAiKey);
 
@@ -124,14 +124,17 @@ export const generateWordsBatch = async (count = 5, filters = {}) => {
     }
 
     const batchPrompt = `
-      Generate ${count} diverse vocabulary words with their complete information.
-      
-      ${filters.topic ? `Topic Focus: ${filters.topic}` : ''}
-      ${filters.difficulty ? `Difficulty Level: ${filters.difficulty}` : ''}
-      
-      Return a JSON array of ${count} word objects, each with the same comprehensive structure.
-      Make sure words are varied and cover different aspects of the ${filters.topic || 'English'} language.
-    `;
+You are a lexicographer API. Output ONE JSON array only (no markdown, no extra text).
+
+Generate ${count} diverse vocabulary words with complete information.
+${filters.topic ? `Topic focus: ${filters.topic}` : ''}
+${filters.difficulty ? `Difficulty level: ${filters.difficulty}` : ''}
+
+Return a JSON array of exactly ${count} objects. Each object MUST follow the same schema below.
+Vary parts of speech and senses; cover different aspects of ${filters.topic || 'English'} vocabulary.
+
+${WORD_JSON_SCHEMA_INSTRUCTIONS}
+`;
 
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
     const result = await model.generateContent(batchPrompt);
@@ -168,16 +171,21 @@ export const validateWordContent = async (wordData) => {
     }
 
     const validationPrompt = `
-      Review the following vocabulary word data for quality and completeness:
-      
-      ${JSON.stringify(wordData, null, 2)}
-      
-      Return a JSON object with:
-      - valid: (boolean) Whether the word data is complete and high quality
-      - errors: (array) List of any issues found
-      - suggestions: (array) Improvement recommendations
-      - completeness_score: (number 0-100) How complete the data is
-    `;
+Review the following vocabulary word data for quality and schema fit (frequency low/medium/high;
+overall_tone in formal|informal|neutral|academic|technical|colloquial|literary;
+meaning difficulty in Easy|Beginner|Medium|Intermediate|Hard|Advanced;
+example_sentences as objects with "text"; usage_distribution spoken+written ≤ 100;
+synonyms/antonyms on meanings should be [] if strings were incorrectly used).
+
+Data:
+${JSON.stringify(wordData, null, 2)}
+
+Return ONLY a JSON object with:
+- valid: (boolean)
+- errors: (array of strings)
+- suggestions: (array of strings)
+- completeness_score: (number 0-100)
+`;
 
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
     const result = await model.generateContent(validationPrompt);

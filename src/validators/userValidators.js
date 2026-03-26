@@ -21,6 +21,10 @@ export const changePasswordSchema = z.object({
   newPassword: z.string().min(6, 'New password must be at least 6 characters'),
 });
 
+export const refreshTokenSchema = z.object({
+  refreshToken: z.string().min(10, 'Refresh token is required'),
+});
+
 export const validateRegister = (data) => {
   return registerSchema.safeParse(data);
 };
@@ -37,14 +41,20 @@ export const validateChangePassword = (data) => {
   return changePasswordSchema.safeParse(data);
 };
 
+export const validateRefreshToken = (data) => {
+  return refreshTokenSchema.safeParse(data);
+};
+
 export default {
   registerSchema,
   loginSchema,
   loginGoogleSchema,
   changePasswordSchema,
+  refreshTokenSchema,
   validateRegister,
   validateLogin,
   validateLoginGoogle,
   validateChangePassword,
+  validateRefreshToken,
 };
 

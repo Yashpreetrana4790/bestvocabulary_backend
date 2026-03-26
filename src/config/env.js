@@ -38,10 +38,12 @@ export const config = {
   // Database
   mongoUri: process.env.MONGO_URI,
 
-  // JWT
+  // JWT — access token (API) + refresh token (session extension)
   jwt: {
     secret: process.env.JWT_SECRET,
     expiresIn: process.env.JWT_EXPIRE || '1h',
+    refreshSecret: process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRE || '30d',
   },
 
   // Google AI

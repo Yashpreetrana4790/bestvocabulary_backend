@@ -6,6 +6,7 @@ import {
   validateLogin,
   validateLoginGoogle,
   validateChangePassword,
+  validateRefreshToken,
 } from '../validators/userValidators.js';
 import {
   registerUser,
@@ -19,6 +20,7 @@ import {
   getSavedWords,
   addSavedWord,
   removeSavedWord,
+  refreshUserSession,
 } from '../services/userService.js';
 import { authLimiter } from '../middlewares/rateLimiter.js';
 import { authenticate } from '../middlewares/auth.js';
@@ -95,6 +97,28 @@ router.post(
  * @desc    Login or register with Google id_token
  * @access  Public
  */
+/**
+ * @route   POST /api/v1/user/refresh
+ * @desc    Issue new access + refresh tokens using a valid refresh JWT
+ * @access  Public (body contains refresh token)
+ */
+router.post(
+  '/refresh',
+  authLimiter,
+  asyncHandler(async (req, res) => {
+    const validation = validateRefreshToken(req.body || {});
+    if (!validation.success) {
+      return res.status(422).json({
+        success: false,
+        message: 'Invalid request',
+        errors: validation.error.errors,
+      });
+    }
+    const result = await refreshUserSession(validation.data.refreshToken);
+    return successResponse(res, result, 'Token refreshed');
+  })
+);
+
 router.post(
   '/login/google',
   authLimiter,
@@ -190,12 +214,15 @@ router.get(
     }
 
     try {
-      const { token, user, isNewUser } = await handleGoogleOAuthCallback(code, callbackUri);
+      const { token, refreshToken, user, isNewUser } = await handleGoogleOAuthCallback(code, callbackUri);
       const callbackPath = '/auth/callback';
       const tokenParam = encodeURIComponent(token);
+      const refreshParam = encodeURIComponent(refreshToken || '');
       const userParam = encodeURIComponent(JSON.stringify(user));
       const newUserParam = isNewUser ? '&isNewUser=1' : '';
-      res.redirect(`${frontendUrl}${callbackPath}?token=${tokenParam}&user=${userParam}${newUserParam}`);
+      res.redirect(
+        `${frontendUrl}${callbackPath}?token=${tokenParam}&refreshToken=${refreshParam}&user=${userParam}${newUserParam}`
+      );
     } catch (err) {
       const message = err.message || 'Google sign-in failed';
       res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(message)}`);

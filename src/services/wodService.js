@@ -177,15 +177,39 @@ const createRandomWordOfTheDay = async () => {
  * @returns {Promise<Array>} Array of WOD entries
  */
 export const getWodHistory = async (limit = 7) => {
-  const history = await Wod.find()
-    .sort({ date: -1 })
-    .limit(limit)
+  // Return unique calendar days (UTC), even if legacy duplicate rows exist.
+  const history = await Wod.aggregate([
+    { $sort: { date: -1, createdAt: -1 } },
+    {
+      $group: {
+        _id: {
+          $dateToString: {
+            date: '$date',
+            format: '%Y-%m-%d',
+            timezone: 'UTC',
+          },
+        },
+        entryId: { $first: '$_id' },
+      },
+    },
+    { $sort: { _id: -1 } },
+    { $limit: limit },
+  ]);
+
+  const orderedIds = history.map((h) => h.entryId);
+  if (!orderedIds.length) return [];
+
+  const docs = await Wod.find({ _id: { $in: orderedIds } })
     .populate({
       path: 'word',
       select: 'word pronunciation meanings.subtitle meanings.easyMeaning',
-    });
-  
-  return history;
+    })
+    .lean();
+
+  const byId = new Map(docs.map((d) => [String(d._id), d]));
+  return orderedIds
+    .map((id) => byId.get(String(id)))
+    .filter(Boolean);
 };
 
 /**

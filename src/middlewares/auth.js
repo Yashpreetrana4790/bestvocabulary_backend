@@ -1,4 +1,4 @@
-import { verifyToken } from '../config/jwt.js';
+import { verifyAccessToken } from '../config/jwt.js';
 import { UnauthorizedError, ForbiddenError } from '../utils/ApiError.js';
 
 /**
@@ -21,7 +21,7 @@ export const authenticate = (req, res, next) => {
       throw new UnauthorizedError('No token provided');
     }
 
-    const decoded = verifyToken(token);
+    const decoded = verifyAccessToken(token);
 
     if (!decoded) {
       throw new UnauthorizedError('Invalid or expired token');

@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { OAuth2Client } from 'google-auth-library';
-import { generateToken } from '../config/jwt.js';
+import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../config/jwt.js';
 import { config } from '../config/env.js';
 import User from '../models/usermodel.js';
 import Word from '../models/wordmodel.js';
@@ -12,6 +12,47 @@ import {
 import logger from '../utils/logger.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+function issueTokenPair(user) {
+  const payload = {
+    userId: user._id,
+    email: user.email,
+    role: user.role,
+  };
+  return {
+    token: generateAccessToken(payload),
+    refreshToken: generateRefreshToken(payload),
+  };
+}
+
+/**
+ * Exchange a valid refresh JWT for new access + refresh tokens.
+ */
+export const refreshUserSession = async (refreshTokenRaw) => {
+  const refreshToken =
+    refreshTokenRaw != null && typeof refreshTokenRaw === 'string' ? refreshTokenRaw.trim() : '';
+  if (!refreshToken) {
+    throw new UnauthorizedError('Refresh token required');
+  }
+  const decoded = verifyRefreshToken(refreshToken);
+  if (!decoded?.userId) {
+    throw new UnauthorizedError('Invalid or expired refresh token');
+  }
+  const user = await User.findById(decoded.userId);
+  if (!user) {
+    throw new UnauthorizedError('Invalid or expired refresh token');
+  }
+  const pair = issueTokenPair(user);
+  return {
+    ...pair,
+    user: {
+      id: user._id,
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role,
+    },
+  };
+};
 
 /** Create OAuth2Client for server-side code flow (uses client secret) */
 function getOAuth2ClientForCodeFlow(redirectUri) {
@@ -94,11 +135,7 @@ export const registerUser = async (userData) => {
     throw new BadRequestError('Failed to create user');
   }
 
-  // Generate token
-  const token = generateToken({
-    userId: newUser._id,
-    email: newUser.email,
-  });
+  const { token, refreshToken } = issueTokenPair(newUser);
 
   logger.info(`User registered successfully: ${newUser.email}`);
 
@@ -110,6 +147,7 @@ export const registerUser = async (userData) => {
       role: newUser.role,
     },
     token,
+    refreshToken,
   };
 };
 
@@ -145,18 +183,14 @@ export const loginUser = async (credentials) => {
     throw new UnauthorizedError('Invalid credentials');
   }
 
-  // Generate token
-  const token = generateToken({
-    userId: user._id,
-    email: user.email,
-    role: user.role,
-  });
+  const { token, refreshToken } = issueTokenPair(user);
 
   logger.info(`User logged in successfully: ${user.email}`);
 
   return {
     message: 'Login successful',
     token,
+    refreshToken,
     user: {
       id: user._id,
       email: user.email,
@@ -191,15 +225,12 @@ export const loginUserGoogle = async (idToken) => {
   const { sub: googleId, email, name } = payload;
   const { user, isNewUser } = await getOrCreateUserFromGoogle(googleId, email, name);
 
-  const token = generateToken({
-    userId: user._id,
-    email: user.email,
-    role: user.role,
-  });
+  const { token, refreshToken } = issueTokenPair(user);
 
   return {
     message: isNewUser ? 'Account created' : 'Login successful',
     token,
+    refreshToken,
     user: {
       id: user._id,
       email: user.email,
@@ -252,14 +283,11 @@ export async function handleGoogleOAuthCallback(code, redirectUri) {
   const { sub: googleId, email, name } = payload;
   const { user, isNewUser } = await getOrCreateUserFromGoogle(googleId, email, name);
 
-  const token = generateToken({
-    userId: user._id,
-    email: user.email,
-    role: user.role,
-  });
+  const { token, refreshToken } = issueTokenPair(user);
 
   return {
     token,
+    refreshToken,
     user: {
       id: user._id,
       email: user.email,
@@ -409,5 +437,6 @@ export default {
   getSavedWords,
   addSavedWord,
   removeSavedWord,
+  refreshUserSession,
 };
 
