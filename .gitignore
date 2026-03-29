@@ -3,6 +3,7 @@
 
 # Environment variables file (if using dotenv or similar)
 .env
+.env.*
 
 # IDE files
 .vscode/
